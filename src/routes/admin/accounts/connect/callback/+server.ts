@@ -33,8 +33,8 @@ export const GET: RequestHandler = async ({ locals, cookies, url }) => {
 		const tokenRes = await fetch('https://api.instagram.com/oauth/access_token', {
 			method: 'POST',
 			body: new URLSearchParams({
-				client_id: env.FB_APP_ID,
-				client_secret: env.FB_APP_SECRET,
+				client_id: env.IG_APP_ID,
+				client_secret: env.IG_APP_SECRET,
 				grant_type: 'authorization_code',
 				redirect_uri: redirectUri,
 				code
@@ -52,7 +52,7 @@ export const GET: RequestHandler = async ({ locals, cookies, url }) => {
 			'https://graph.instagram.com/access_token?' +
 				new URLSearchParams({
 					grant_type: 'ig_exchange_token',
-					client_secret: env.FB_APP_SECRET,
+					client_secret: env.IG_APP_SECRET,
 					access_token: tokenData.access_token
 				})
 		);

@@ -18,7 +18,7 @@ export const GET: RequestHandler = async ({ locals, cookies, url }) => {
 	const redirectUri = `${url.origin}/admin/accounts/connect/callback`;
 
 	const oauthUrl = new URL('https://www.instagram.com/oauth/authorize');
-	oauthUrl.searchParams.set('client_id', env.FB_APP_ID);
+	oauthUrl.searchParams.set('client_id', env.IG_APP_ID);
 	oauthUrl.searchParams.set('redirect_uri', redirectUri);
 	oauthUrl.searchParams.set('scope', 'instagram_business_basic,instagram_business_content_publish');
 	oauthUrl.searchParams.set('response_type', 'code');
