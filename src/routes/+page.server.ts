@@ -1,0 +1,8 @@
+import { redirect } from '@sveltejs/kit';
+import type { PageServerLoad } from './$types';
+
+export const load: PageServerLoad = async ({ parent }) => {
+	const { session } = await parent();
+	if (session) redirect(303, '/dashboard');
+	redirect(303, '/login');
+};

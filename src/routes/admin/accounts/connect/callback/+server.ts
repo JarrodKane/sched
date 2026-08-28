@@ -1,0 +1,120 @@
+import { redirect } from '@sveltejs/kit';
+import { env } from '$env/dynamic/private';
+import { db } from '$lib/server/db';
+import { users, socialAccounts } from '$lib/server/db/schema';
+import { eq } from 'drizzle-orm';
+import type { RequestHandler } from './$types';
+
+export const GET: RequestHandler = async ({ locals, cookies, url }) => {
+	const { user } = await locals.safeGetSession();
+	if (!user) redirect(303, '/login');
+
+	const [profile] = await db.select().from(users).where(eq(users.id, user.id)).limit(1);
+	if (!profile?.isAdmin) redirect(303, '/dashboard');
+
+	// Verify CSRF state
+	const state = url.searchParams.get('state');
+	const storedState = cookies.get('ig_oauth_state');
+	cookies.delete('ig_oauth_state', { path: '/' });
+	if (!state || state !== storedState) {
+		redirect(303, '/admin/accounts?error=' + encodeURIComponent('Invalid state — please try again'));
+	}
+
+	const code = url.searchParams.get('code');
+	if (!code) {
+		const msg = url.searchParams.get('error_description') ?? 'Connection cancelled';
+		redirect(303, '/admin/accounts?error=' + encodeURIComponent(msg));
+	}
+
+	try {
+		const redirectUri = `${url.origin}/admin/accounts/connect/callback`;
+
+		// Exchange code for short-lived Facebook user token
+		const tokenRes = await fetch(
+			'https://graph.facebook.com/oauth/access_token?' +
+				new URLSearchParams({
+					client_id: env.FB_APP_ID,
+					client_secret: env.FB_APP_SECRET,
+					redirect_uri: redirectUri,
+					code
+				})
+		);
+		const tokenData = (await tokenRes.json()) as { access_token?: string; error?: { message: string } };
+		if (!tokenData.access_token) throw new Error(tokenData.error?.message ?? 'Token exchange failed');
+
+		// Extend to long-lived Facebook user token (~60 days)
+		const llRes = await fetch(
+			'https://graph.facebook.com/oauth/access_token?' +
+				new URLSearchParams({
+					grant_type: 'fb_exchange_token',
+					client_id: env.FB_APP_ID,
+					client_secret: env.FB_APP_SECRET,
+					fb_exchange_token: tokenData.access_token
+				})
+		);
+		const llData = (await llRes.json()) as {
+			access_token?: string;
+			expires_in?: number;
+			error?: { message: string };
+		};
+		if (!llData.access_token) throw new Error(llData.error?.message ?? 'Failed to extend token');
+
+		// Get all Instagram Business Accounts accessible to this user
+		const igAccountsRes = await fetch(
+			'https://graph.facebook.com/v25.0/me/instagram_business_accounts?' +
+				new URLSearchParams({
+					fields: 'id,username,name',
+					access_token: llData.access_token
+				})
+		);
+		const igAccountsData = (await igAccountsRes.json()) as {
+			data?: Array<{ id: string; username?: string; name?: string }>;
+			error?: { message: string };
+		};
+		if (igAccountsData.error) throw new Error(igAccountsData.error.message);
+
+		const expiresAt = llData.expires_in ? new Date(Date.now() + llData.expires_in * 1000) : null;
+		const added: string[] = [];
+		const refreshed: string[] = [];
+
+		for (const igAccount of igAccountsData.data ?? []) {
+			const igId = igAccount.id;
+			const label = igAccount.username ? `@${igAccount.username}` : (igAccount.name ?? igId);
+
+			const existing = await db
+				.select({ id: socialAccounts.id })
+				.from(socialAccounts)
+				.where(eq(socialAccounts.igBusinessId, igId))
+				.limit(1);
+
+			if (existing.length > 0) {
+				await db
+					.update(socialAccounts)
+					.set({ accessToken: llData.access_token, tokenExpiresAt: expiresAt, label })
+					.where(eq(socialAccounts.igBusinessId, igId));
+				refreshed.push(label);
+			} else {
+				// fbPageId not applicable for this flow — store IG ID to satisfy NOT NULL
+				await db.insert(socialAccounts).values({
+					platform: 'instagram',
+					label,
+					igBusinessId: igId,
+					fbPageId: igId,
+					accessToken: llData.access_token,
+					tokenExpiresAt: expiresAt
+				});
+				added.push(label);
+			}
+		}
+
+		let message = '';
+		if (added.length) message += `Connected: ${added.join(', ')}`;
+		if (refreshed.length) message += (message ? '. ' : '') + `Token refreshed: ${refreshed.join(', ')}`;
+		if (!message) message = 'No Instagram Business accounts found on this Facebook account';
+
+		redirect(303, '/admin/accounts?message=' + encodeURIComponent(message));
+	} catch (err) {
+		const msg = err instanceof Error ? err.message : 'Connection failed';
+		redirect(303, '/admin/accounts?error=' + encodeURIComponent(msg));
+	}
+};
