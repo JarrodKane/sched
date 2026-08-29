@@ -10,7 +10,10 @@ export const load: PageServerLoad = async ({ parent }) => {
 
 	let accounts;
 	if (profile.isAdmin) {
-		accounts = await db.select().from(socialAccounts).orderBy(socialAccounts.label);
+		accounts = await db
+			.select({ id: socialAccounts.id, label: socialAccounts.label, platform: socialAccounts.platform })
+			.from(socialAccounts)
+			.orderBy(socialAccounts.label);
 	} else {
 		accounts = await db
 			.select({ id: socialAccounts.id, label: socialAccounts.label, platform: socialAccounts.platform })

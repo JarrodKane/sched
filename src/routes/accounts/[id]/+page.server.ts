@@ -3,7 +3,6 @@ import { db } from '$lib/server/db';
 import { users, socialAccounts, scheduledPosts, captionSnippets } from '$lib/server/db/schema';
 import { eq, and, asc, inArray, desc } from 'drizzle-orm';
 import { canAccessAccount, canModifyPost } from '$lib/server/access';
-import { publishPost } from '$lib/platforms/instagram';
 import { supabaseAdmin } from '$lib/server/supabase-admin';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -206,50 +205,20 @@ export const actions: Actions = {
 		if (type !== 'feed' && type !== 'story') return fail(400, { error: 'Invalid post type.' });
 		if (!mediaUrl.startsWith('https://')) return fail(400, { error: 'Invalid media URL.' });
 
-		const [account] = await db
-			.select()
-			.from(socialAccounts)
-			.where(eq(socialAccounts.id, params.id))
-			.limit(1);
-		if (!account?.accessToken) return fail(400, { error: 'Account not connected.' });
+		// Insert as pending with scheduled_for = now — the Edge Function picks it up within 60s.
+		// Avoids running the full publish flow (including Instagram container polling) inside a
+		// serverless function that has a short timeout.
+		await db.insert(scheduledPosts).values({
+			accountId: params.id,
+			createdBy: profile.id,
+			type,
+			caption: type === 'feed' ? (caption || null) : null,
+			mediaUrl,
+			thumbnailUrl,
+			scheduledFor: new Date(),
+			status: 'pending'
+		});
 
-		const now = new Date();
-		const [post] = await db
-			.insert(scheduledPosts)
-			.values({
-				accountId: params.id,
-				createdBy: profile.id,
-				type,
-				caption: type === 'feed' ? (caption || null) : null,
-				mediaUrl,
-				thumbnailUrl,
-				scheduledFor: now,
-				status: 'publishing'
-			})
-			.returning({ id: scheduledPosts.id });
-
-		try {
-			await publishPost(
-				account.igBusinessId,
-				account.accessToken,
-				type as 'feed' | 'story',
-				mediaUrl,
-				type === 'feed' ? caption : null
-			);
-
-			await db
-				.update(scheduledPosts)
-				.set({ status: 'published', publishedAt: new Date() })
-				.where(eq(scheduledPosts.id, post.id));
-
-			return { published: true };
-		} catch (err) {
-			const message = err instanceof Error ? err.message : 'Publish failed';
-			await db
-				.update(scheduledPosts)
-				.set({ status: 'failed', errorMessage: message })
-				.where(eq(scheduledPosts.id, post.id));
-			return fail(500, { error: message });
-		}
+		return { published: true };
 	}
 };

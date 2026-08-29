@@ -4,12 +4,14 @@
 
 	let { data, children } = $props();
 
-	let theme = $state('bumblebee');
-
-	$effect(() => {
-		const saved = localStorage.getItem('ig-theme');
-		if (saved === 'abyss' || saved === 'bumblebee') theme = saved;
-	});
+	// Read from localStorage synchronously so theme is correct on first render (no flash).
+	// The blocking script in app.html already set data-theme before paint; this keeps
+	// reactive state in sync with it.
+	let theme = $state(
+		typeof window !== 'undefined' && localStorage.getItem('ig-theme') === 'abyss'
+			? 'abyss'
+			: 'bumblebee'
+	);
 
 	$effect(() => {
 		document.documentElement.setAttribute('data-theme', theme);

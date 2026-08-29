@@ -171,7 +171,8 @@
 		return d.toISOString().slice(0, 16);
 	}
 
-	const minDatetime = new Date(Date.now() + 60_000).toISOString().slice(0, 16);
+	// Derived so it stays current across 30s poll cycles (invalidateAll re-renders the component)
+	const minDatetime = $derived(new Date(Date.now() + 60_000).toISOString().slice(0, 16));
 	let scheduledFor = $state(defaultScheduleTime());
 
 	$effect(() => {
@@ -373,7 +374,7 @@
 					<div role="alert" class="alert alert-success alert-soft text-sm">Post scheduled!</div>
 				{/if}
 				{#if form?.published}
-					<div role="alert" class="alert alert-success alert-soft text-sm">Published to Instagram!</div>
+					<div role="alert" class="alert alert-success alert-soft text-sm">Queued — will publish within 60 seconds.</div>
 				{/if}
 
 				<form
@@ -475,19 +476,17 @@
 										<img src={img.url} alt="" class="h-full w-full object-cover" />
 									</button>
 								{/each}
-								{#if data.priorUploads.length > 0}
-									<button
-										type="button"
-										onclick={() => galleryDialog?.showModal()}
-										class="btn btn-ghost btn-sm gap-1 text-base-content/60"
-									>
-										<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-											<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
-											<polyline points="21 15 16 10 5 21"/>
-										</svg>
-										Browse library
-									</button>
-								{/if}
+								<button
+									type="button"
+									onclick={() => galleryDialog?.showModal()}
+									class="btn btn-ghost btn-sm gap-1 text-base-content/60"
+								>
+									<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+										<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+										<polyline points="21 15 16 10 5 21"/>
+									</svg>
+									Browse library
+								</button>
 							</div>
 						</div>
 					{/if}

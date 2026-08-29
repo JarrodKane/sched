@@ -1,23 +1,13 @@
-import { error, redirect } from '@sveltejs/kit';
+import { redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { socialAccounts, scheduledPosts } from '$lib/server/db/schema';
+import { scheduledPosts } from '$lib/server/db/schema';
 import { eq, and, inArray, desc, gte } from 'drizzle-orm';
-import { canAccessAccount } from '$lib/server/access';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, parent }) => {
-	const { profile } = await parent();
+	// Layout (+layout.server.ts) already validated access and fetched accountMeta.
+	const { profile, accountMeta } = await parent();
 	if (!profile) redirect(303, '/login');
-
-	const allowed = await canAccessAccount(profile.id, params.id, profile.isAdmin);
-	if (!allowed) error(403, 'Access denied');
-
-	const [account] = await db
-		.select()
-		.from(socialAccounts)
-		.where(eq(socialAccounts.id, params.id))
-		.limit(1);
-	if (!account) error(404, 'Account not found');
 
 	const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
@@ -34,5 +24,5 @@ export const load: PageServerLoad = async ({ params, parent }) => {
 		.orderBy(desc(scheduledPosts.scheduledFor))
 		.limit(100);
 
-	return { account, posts };
+	return { account: accountMeta, posts };
 };

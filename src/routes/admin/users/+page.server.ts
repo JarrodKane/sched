@@ -5,6 +5,13 @@ import { eq } from 'drizzle-orm';
 import { supabaseAdmin } from '$lib/server/supabase-admin';
 import type { Actions, PageServerLoad } from './$types';
 
+async function requireAdmin(locals: App.Locals) {
+	const { user } = await locals.safeGetSession();
+	if (!user) return null;
+	const [profile] = await db.select().from(users).where(eq(users.id, user.id)).limit(1);
+	return profile?.isAdmin ? profile : null;
+}
+
 export const load: PageServerLoad = async () => {
 	const [allUsers, allAccounts, allAccess] = await Promise.all([
 		db.select().from(users).orderBy(users.name),
@@ -29,7 +36,9 @@ export const load: PageServerLoad = async () => {
 };
 
 export const actions: Actions = {
-	create: async ({ request }) => {
+	create: async ({ request, locals }) => {
+		if (!await requireAdmin(locals)) return fail(403, { createError: 'Access denied' });
+
 		const form = await request.formData();
 		const email = (form.get('email') as string)?.trim().toLowerCase();
 		const name = (form.get('name') as string)?.trim();
@@ -59,7 +68,9 @@ export const actions: Actions = {
 		return { created: true };
 	},
 
-	delete: async ({ request }) => {
+	delete: async ({ request, locals }) => {
+		if (!await requireAdmin(locals)) return fail(403, { deleteError: 'Access denied' });
+
 		const form = await request.formData();
 		const userId = form.get('user_id') as string;
 		if (!userId) return fail(400, { deleteError: 'Missing user ID.' });
@@ -72,7 +83,9 @@ export const actions: Actions = {
 		return { deleted: true };
 	},
 
-	setAccess: async ({ request }) => {
+	setAccess: async ({ request, locals }) => {
+		if (!await requireAdmin(locals)) return fail(403, { accessError: 'Access denied' });
+
 		const form = await request.formData();
 		const userId = form.get('user_id') as string;
 		const accountIds = form.getAll('account_ids') as string[];

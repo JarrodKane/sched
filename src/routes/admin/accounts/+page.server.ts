@@ -1,8 +1,15 @@
 import { fail } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { socialAccounts, captionSnippets } from '$lib/server/db/schema';
+import { users, socialAccounts, captionSnippets } from '$lib/server/db/schema';
 import { eq, asc } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
+
+async function requireAdmin(locals: App.Locals) {
+	const { user } = await locals.safeGetSession();
+	if (!user) return null;
+	const [profile] = await db.select().from(users).where(eq(users.id, user.id)).limit(1);
+	return profile?.isAdmin ? profile : null;
+}
 
 export const load: PageServerLoad = async ({ url }) => {
 	const accounts = await db.select().from(socialAccounts).orderBy(socialAccounts.label);
@@ -26,7 +33,9 @@ export const load: PageServerLoad = async ({ url }) => {
 };
 
 export const actions: Actions = {
-	add: async ({ request }) => {
+	add: async ({ request, locals }) => {
+		if (!await requireAdmin(locals)) return fail(403, { addError: 'Access denied' });
+
 		const form = await request.formData();
 		const label = (form.get('label') as string)?.trim();
 		const igBusinessId = (form.get('ig_business_id') as string)?.trim();
@@ -49,7 +58,9 @@ export const actions: Actions = {
 		return { added: true };
 	},
 
-	remove: async ({ request }) => {
+	remove: async ({ request, locals }) => {
+		if (!await requireAdmin(locals)) return fail(403, { removeError: 'Access denied' });
+
 		const form = await request.formData();
 		const id = form.get('id') as string;
 		if (!id) return fail(400, { removeError: 'Missing account ID.' });
@@ -58,7 +69,9 @@ export const actions: Actions = {
 		return { removed: true };
 	},
 
-	addSnippet: async ({ request }) => {
+	addSnippet: async ({ request, locals }) => {
+		if (!await requireAdmin(locals)) return fail(403, { snippetError: 'Access denied', snippetAccountId: '' });
+
 		const form = await request.formData();
 		const accountId = (form.get('account_id') as string)?.trim();
 		const snippetLabel = (form.get('snippet_label') as string)?.trim();
@@ -77,7 +90,9 @@ export const actions: Actions = {
 		return { snippetAdded: true };
 	},
 
-	deleteSnippet: async ({ request }) => {
+	deleteSnippet: async ({ request, locals }) => {
+		if (!await requireAdmin(locals)) return fail(403, { snippetError: 'Access denied' });
+
 		const form = await request.formData();
 		const id = (form.get('id') as string)?.trim();
 		if (!id) return fail(400, { snippetError: 'Missing snippet ID.' });
