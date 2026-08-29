@@ -1,7 +1,7 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { users, socialAccounts, scheduledPosts, captionSnippets, tagSnippets } from '$lib/server/db/schema';
-import { eq, and, asc, inArray } from 'drizzle-orm';
+import { eq, and, asc, desc, gte, inArray } from 'drizzle-orm';
 import { canAccessAccount, canModifyPost } from '$lib/server/access';
 import { supabaseAdmin } from '$lib/server/supabase-admin';
 import type { Actions, PageServerLoad } from './$types';
@@ -18,7 +18,8 @@ export const load: PageServerLoad = async ({ params, parent }) => {
 	if (!profile) redirect(303, '/login');
 
 	// Run all independent queries in parallel after the profile is resolved
-	const [allowed, accountRows, queue, storageResult, snippets, tags] = await Promise.all([
+	const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+	const [allowed, accountRows, queue, storageResult, snippets, tags, history] = await Promise.all([
 		canAccessAccount(profile.id, params.id, profile.isAdmin),
 		db.select().from(socialAccounts).where(eq(socialAccounts.id, params.id)).limit(1),
 		db
@@ -38,7 +39,30 @@ export const load: PageServerLoad = async ({ params, parent }) => {
 			.select()
 			.from(tagSnippets)
 			.where(eq(tagSnippets.accountId, params.id))
-			.orderBy(asc(tagSnippets.sortOrder), asc(tagSnippets.createdAt))
+			.orderBy(asc(tagSnippets.sortOrder), asc(tagSnippets.createdAt)),
+		db
+			.select({
+				id: scheduledPosts.id,
+				type: scheduledPosts.type,
+				caption: scheduledPosts.caption,
+				mediaUrl: scheduledPosts.mediaUrl,
+				thumbnailUrl: scheduledPosts.thumbnailUrl,
+				carouselItems: scheduledPosts.carouselItems,
+				status: scheduledPosts.status,
+				errorMessage: scheduledPosts.errorMessage,
+				scheduledFor: scheduledPosts.scheduledFor,
+				publishedAt: scheduledPosts.publishedAt
+			})
+			.from(scheduledPosts)
+			.where(
+				and(
+					eq(scheduledPosts.accountId, params.id),
+					inArray(scheduledPosts.status, ['published', 'failed', 'cancelled']),
+					gte(scheduledPosts.scheduledFor, thirtyDaysAgo)
+				)
+			)
+			.orderBy(desc(scheduledPosts.scheduledFor))
+			.limit(20)
 	]);
 
 	if (!allowed) error(403, 'Access denied');
@@ -50,7 +74,7 @@ export const load: PageServerLoad = async ({ params, parent }) => {
 		url: supabaseAdmin.storage.from('media').getPublicUrl(`${params.id}/${f.name}`).data.publicUrl
 	}));
 
-	return { account, queue, priorUploads, snippets, tagSnippets: tags };
+	return { account, queue, priorUploads, snippets, tagSnippets: tags, history };
 };
 
 export const actions: Actions = {
@@ -156,8 +180,8 @@ export const actions: Actions = {
 		if (!post || post.status !== 'pending') {
 			return fail(400, { error: 'Post cannot be edited.' });
 		}
-		if (post.type !== 'feed') {
-			return fail(400, { error: 'Only feed posts have captions.' });
+		if (post.type !== 'feed' && post.type !== 'carousel') {
+			return fail(400, { error: 'Only feed and carousel posts have captions.' });
 		}
 
 		await db

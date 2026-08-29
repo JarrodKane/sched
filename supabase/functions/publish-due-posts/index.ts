@@ -21,6 +21,7 @@ interface SocialAccount {
 	id: string;
 	ig_business_id: string;
 	access_token: string;
+	location_id: string | null;
 }
 
 async function waitForContainerReady(
@@ -72,6 +73,7 @@ async function publishToInstagram(
 				params.user_tags = JSON.stringify(usernames.map((u) => ({ username: u, x: 0.5, y: 0.5 })));
 			}
 		}
+		if (account.location_id) params.location_id = account.location_id;
 	}
 
 	const containerId = await createMediaContainer(account.ig_business_id, account.access_token, params);
@@ -152,7 +154,7 @@ Deno.serve(async () => {
 	const accountIds = [...new Set(duePosts.map((p: ScheduledPost) => p.account_id))];
 	const { data: accounts, error: acctError } = await supabase
 		.from('social_accounts')
-		.select('id, ig_business_id, access_token')
+		.select('id, ig_business_id, access_token, location_id')
 		.in('id', accountIds);
 
 	if (acctError) {

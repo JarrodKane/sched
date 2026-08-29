@@ -14,7 +14,9 @@ export const socialAccounts = pgTable('social_accounts', {
 	igBusinessId: text('ig_business_id').notNull(),
 	fbPageId: text('fb_page_id').notNull(),
 	accessToken: text('access_token').notNull(),
-	tokenExpiresAt: timestamp('token_expires_at', { withTimezone: true })
+	tokenExpiresAt: timestamp('token_expires_at', { withTimezone: true }),
+	locationId: text('location_id'),
+	locationName: text('location_name')
 });
 
 export const userAccountAccess = pgTable(

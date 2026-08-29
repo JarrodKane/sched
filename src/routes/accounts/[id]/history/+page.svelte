@@ -3,6 +3,8 @@
 
 	let { data }: { data: PageData } = $props();
 
+	type Post = (typeof data.posts)[0];
+
 	function relativeTime(date: string | Date): string {
 		const diff = Date.now() - new Date(date).getTime();
 		if (diff < 60_000) return 'just now';
@@ -15,16 +17,39 @@
 		return new Date(date).toLocaleDateString();
 	}
 
-	function statusBadge(status: string): string {
-		if (status === 'published') return 'badge-success badge-soft';
-		if (status === 'failed') return 'badge-error badge-soft';
-		if (status === 'cancelled') return 'badge-ghost';
-		return 'badge-ghost';
+	function formatTime(date: string | Date): string {
+		return new Date(date).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+	}
+
+	const groups = $derived.by(() => {
+		const map = new Map<string, Post[]>();
+		const todayMs = new Date().setHours(0, 0, 0, 0);
+		const yesterdayMs = todayMs - 86_400_000;
+
+		for (const post of data.posts) {
+			const d = new Date(post.scheduledFor);
+			const dayMs = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+			let label: string;
+			if (dayMs === todayMs) label = 'Today';
+			else if (dayMs === yesterdayMs) label = 'Yesterday';
+			else label = d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+
+			const arr = map.get(label);
+			if (arr) arr.push(post);
+			else map.set(label, [post]);
+		}
+
+		return [...map.entries()].map(([label, posts]) => ({ label, posts: [...posts].reverse() }));
+	});
+
+	function carouselCount(post: Post): number {
+		if (!post.carouselItems) return 0;
+		try { return (JSON.parse(post.carouselItems) as string[]).length; } catch { return 0; }
 	}
 
 	let brokenImages = $state(new Set<string>());
 
-	function thumbSrc(post: { thumbnailUrl: string | null; mediaUrl: string }) {
+	function thumbSrc(post: Post) {
 		return post.thumbnailUrl ?? post.mediaUrl;
 	}
 </script>
@@ -32,51 +57,82 @@
 <svelte:head><title>{data.account.label} History — IG Scheduler</title></svelte:head>
 
 {#if data.posts.length === 0}
-	<div role="alert" class="alert alert-soft">No post history in the last 30 days.</div>
+	<div class="flex flex-col items-center justify-center py-20 text-center">
+		<p class="text-base-content/40 text-sm">No posts in the last 30 days.</p>
+	</div>
 {:else}
-	<ul class="flex flex-col gap-3">
-		{#each data.posts as post}
-			{@const scheduledMs = new Date(post.scheduledFor).getTime()}
-			{@const publishedMs = post.publishedAt ? new Date(post.publishedAt).getTime() : null}
-			<li class="card bg-base-100 {post.status === 'cancelled' ? 'opacity-60' : ''}">
-				<div class="card-body flex-row items-start gap-4 p-4">
-					{#if brokenImages.has(thumbSrc(post))}
-						<div class="h-16 w-16 shrink-0 rounded-box bg-base-200 flex items-center justify-center text-xs text-base-content/40">
-							No image
-						</div>
-					{:else}
-						<img
-							src={thumbSrc(post)}
-							alt=""
-							class="h-16 w-16 shrink-0 rounded-box object-cover"
-							onerror={() => { brokenImages = new Set([...brokenImages, thumbSrc(post)]); }}
-						/>
-					{/if}
-					<div class="min-w-0 flex-1">
-						<div class="flex flex-wrap items-center gap-1.5 mb-1">
-							<span class="badge badge-ghost badge-sm">{post.type}</span>
-							<span class="badge badge-sm {statusBadge(post.status)}">{post.status}</span>
-						</div>
-						{#if post.caption}
-							<p class="text-sm text-base-content line-clamp-2 mb-1">{post.caption}</p>
-						{/if}
-						{#if post.publishedAt}
-							<p class="text-xs text-base-content/50" title={new Date(post.publishedAt).toLocaleString()}>
-								Published {relativeTime(post.publishedAt)}
-							</p>
-						{:else if post.errorMessage}
-							<p class="text-xs text-error">{post.errorMessage}</p>
-						{:else if post.status === 'cancelled'}
-							<p class="text-xs text-base-content/50">Cancelled</p>
-						{/if}
-						{#if !publishedMs || Math.abs(scheduledMs - publishedMs) > 120_000}
-							<p class="text-xs text-base-content/40 mt-0.5" title={new Date(post.scheduledFor).toLocaleString()}>
-								Scheduled for {new Date(post.scheduledFor).toLocaleString()}
-							</p>
-						{/if}
-					</div>
-				</div>
-			</li>
+	<div class="flex flex-col gap-8">
+		{#each groups as group}
+			<div>
+				<p class="text-xs font-semibold uppercase tracking-wider text-base-content/40 mb-3 px-1">
+					{group.label}
+				</p>
+				<ul class="flex flex-col gap-2">
+					{#each group.posts as post}
+						{@const thumb = thumbSrc(post)}
+						{@const count = post.type === 'carousel' ? carouselCount(post) : 0}
+						<li class="card bg-base-100 {post.status === 'cancelled' ? 'opacity-60' : ''}">
+							<div class="card-body flex-row items-start gap-4 p-4">
+								<!-- Thumbnail -->
+								{#if brokenImages.has(thumb)}
+									<div class="h-14 w-14 shrink-0 rounded-box bg-base-200 flex items-center justify-center text-xs text-base-content/30">
+										—
+									</div>
+								{:else}
+									<img
+										src={thumb}
+										alt=""
+										class="h-14 w-14 shrink-0 rounded-box object-cover"
+										onerror={() => { brokenImages = new Set([...brokenImages, thumb]); }}
+									/>
+								{/if}
+
+								<!-- Content -->
+								<div class="min-w-0 flex-1">
+									<!-- Status row -->
+									<div class="flex flex-wrap items-center gap-1.5 mb-1">
+										{#if post.status === 'published'}
+											<span class="badge badge-success badge-soft badge-sm">Published</span>
+										{:else if post.status === 'failed'}
+											<span class="badge badge-error badge-soft badge-sm">Failed</span>
+										{:else}
+											<span class="badge badge-ghost badge-sm">Cancelled</span>
+										{/if}
+										<span class="badge badge-ghost badge-sm capitalize">{post.type}</span>
+										{#if count > 1}
+											<span class="badge badge-ghost badge-sm">{count} images</span>
+										{/if}
+									</div>
+
+									<!-- Time -->
+									{#if post.publishedAt}
+										<p class="text-xs text-base-content/60">
+											{relativeTime(post.publishedAt)}
+											<span class="text-base-content/30 ml-1">· {formatTime(post.publishedAt)}</span>
+										</p>
+									{:else if post.status === 'failed'}
+										<p class="text-xs text-base-content/40">Scheduled {formatTime(post.scheduledFor)}</p>
+									{:else}
+										<p class="text-xs text-base-content/40">{formatTime(post.scheduledFor)}</p>
+									{/if}
+
+									<!-- Caption -->
+									{#if post.caption}
+										<p class="text-xs text-base-content/60 line-clamp-2 mt-1 leading-snug">{post.caption}</p>
+									{/if}
+
+									<!-- Error -->
+									{#if post.errorMessage && post.status === 'failed'}
+										<p class="text-xs text-error mt-1 leading-snug">{post.errorMessage}</p>
+									{/if}
+								</div>
+							</div>
+						</li>
+					{/each}
+				</ul>
+			</div>
 		{/each}
-	</ul>
+
+		<p class="text-xs text-base-content/30 text-center pb-4">Showing last 30 days</p>
+	</div>
 {/if}

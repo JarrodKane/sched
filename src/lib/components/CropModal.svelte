@@ -313,7 +313,7 @@
 </script>
 
 <dialog bind:this={dialog} class="modal" onclose={onDialogClose}>
-	<div class="modal-box max-w-xl w-full p-6 flex flex-col gap-5">
+	<div class="modal-box max-w-xl w-full p-4 sm:p-6 flex flex-col gap-4 sm:gap-5 max-h-[92dvh] overflow-y-auto">
 
 		<!-- Header -->
 		<div class="flex items-center justify-between">
@@ -359,7 +359,7 @@
 
 		<!-- Viewport: background layer sits behind Cropper.js — visible in empty
 		     areas when the image is zoomed out. Preview overlay appears on top. -->
-		<div class="relative w-full overflow-hidden rounded-box" style="height: 420px;">
+		<div class="relative w-full overflow-hidden rounded-box" style="height: clamp(200px, 40dvh, 420px);">
 			<!-- Background preview layer (always rendered, sits behind cropper) -->
 			<div class="absolute inset-0 overflow-hidden" style="z-index: 0;">
 				{#if bgType === 'blur' && cropObjectUrl}

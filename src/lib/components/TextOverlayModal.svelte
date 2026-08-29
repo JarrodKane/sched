@@ -264,7 +264,7 @@
 		</div>
 
 		<!-- Canvas preview — fixed-height viewport with dark bg (mirrors CropModal viewport) -->
-		<div class="rounded-xl overflow-hidden relative" style="height:360px; background:#111;">
+		<div class="rounded-xl overflow-hidden relative" style="height: clamp(180px, 38dvh, 360px); background:#111;">
 			{#if loadError}
 				<div class="absolute inset-0 flex items-center justify-center">
 					<p class="text-sm text-error p-4">{loadError}</p>

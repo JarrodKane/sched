@@ -8,7 +8,6 @@
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
-	let uploading = $state(false);
 	let uploadedUrl = $state('');
 	let thumbnailUrlForPost = $state('');
 	let uploadError = $state('');
@@ -19,6 +18,9 @@
 	let captionEl = $state<HTMLTextAreaElement | null>(null);
 	let fileInput = $state<HTMLInputElement | null>(null);
 	let imageDimensions = $state<{ width: number; height: number } | null>(null);
+
+	// Right-panel tab
+	let queueTab = $state<'upcoming' | 'history'>('upcoming');
 
 	// Carousel state
 	let carouselUrls = $state<string[]>([]);
@@ -67,6 +69,8 @@
 	let reschedulePostId = $state('');
 	let rescheduleTime = $state('');
 	let rescheduling = $state(false);
+	let rescheduleError = $state('');
+	let cancelling = $state<string | null>(null);
 
 	// Gallery pick modal
 	let galleryDialog = $state<HTMLDialogElement | null>(null);
@@ -89,10 +93,12 @@
 	let editCaptionPostId = $state('');
 	let editCaptionValue = $state('');
 	let editingCaption = $state(false);
+	let editCaptionError = $state('');
 
 	function openEditCaption(postId: string, currentCaption: string | null) {
 		editCaptionPostId = postId;
 		editCaptionValue = currentCaption ?? '';
+		editCaptionError = '';
 		editCaptionDialog?.showModal();
 	}
 
@@ -232,6 +238,7 @@
 
 	function openReschedule(postId: string, currentScheduledFor: string | Date) {
 		reschedulePostId = postId;
+		rescheduleError = '';
 		const d = new Date(currentScheduledFor);
 		// Default to the same time but tomorrow, or 1 hour from now if that's further out
 		const tomorrow = new Date(d);
@@ -331,7 +338,12 @@
 				rescheduling = true;
 				return async ({ result, update }) => {
 					rescheduling = false;
-					if (result.type !== 'failure') rescheduleDialog?.close();
+					if (result.type === 'failure') {
+						rescheduleError = (result.data as { error?: string })?.error ?? 'Failed to reschedule.';
+					} else {
+						rescheduleError = '';
+						rescheduleDialog?.close();
+					}
 					await update();
 				};
 			}}
@@ -349,8 +361,8 @@
 					class="input w-full"
 				/>
 			</fieldset>
-			{#if form?.error}
-				<div role="alert" class="alert alert-error alert-soft text-sm">{form.error}</div>
+			{#if rescheduleError}
+				<div role="alert" class="alert alert-error alert-soft text-sm">{rescheduleError}</div>
 			{/if}
 			<div class="flex gap-2">
 				<button type="submit" disabled={rescheduling} class="btn btn-primary flex-1">
@@ -374,7 +386,7 @@
 		{#if data.priorUploads.length === 0}
 			<p class="text-sm text-base-content/40">No images in library yet.</p>
 		{:else}
-			<div class="grid grid-cols-3 sm:grid-cols-4 gap-3 max-h-[60vh] overflow-y-auto overflow-x-hidden">
+			<div class="grid grid-cols-3 sm:grid-cols-4 gap-3 max-h-[60dvh] overflow-y-auto overflow-x-hidden">
 				{#each data.priorUploads as img}
 					<button
 						type="button"
@@ -410,7 +422,12 @@
 				editingCaption = true;
 				return async ({ result, update }) => {
 					editingCaption = false;
-					if (result.type !== 'failure') editCaptionDialog?.close();
+					if (result.type === 'failure') {
+						editCaptionError = (result.data as { error?: string })?.error ?? 'Failed to save caption.';
+					} else {
+						editCaptionError = '';
+						editCaptionDialog?.close();
+					}
 					await update();
 				};
 			}}
@@ -427,8 +444,8 @@
 					class="textarea w-full"
 				></textarea>
 			</fieldset>
-			{#if form?.error}
-				<div role="alert" class="alert alert-error alert-soft text-sm">{form.error}</div>
+			{#if editCaptionError}
+				<div role="alert" class="alert alert-error alert-soft text-sm">{editCaptionError}</div>
 			{/if}
 			<div class="flex gap-2">
 				<button type="submit" disabled={editingCaption} class="btn btn-primary flex-1">
@@ -490,17 +507,17 @@
 						<div class="join">
 							<button
 								type="button"
-								onclick={() => { postType = 'feed'; carouselUrls = []; }}
+								onclick={() => { postType = 'feed'; carouselUrls = []; uploadedUrl = ''; thumbnailUrlForPost = ''; imageDimensions = null; if (fileInput) fileInput.value = ''; }}
 								class="btn join-item btn-sm {postType === 'feed' ? 'btn-primary' : ''}"
 							>Feed</button>
 							<button
 								type="button"
-								onclick={() => { postType = 'carousel'; }}
+								onclick={() => { postType = 'carousel'; uploadedUrl = ''; thumbnailUrlForPost = ''; imageDimensions = null; if (fileInput) fileInput.value = ''; }}
 								class="btn join-item btn-sm {postType === 'carousel' ? 'btn-primary' : ''}"
 							>Carousel</button>
 							<button
 								type="button"
-								onclick={() => { postType = 'story'; carouselUrls = []; selectedTags = []; }}
+								onclick={() => { postType = 'story'; carouselUrls = []; selectedTags = []; uploadedUrl = ''; thumbnailUrlForPost = ''; imageDimensions = null; if (fileInput) fileInput.value = ''; }}
 								class="btn join-item btn-sm {postType === 'story' ? 'btn-primary' : ''}"
 							>Story</button>
 						</div>
@@ -777,90 +794,177 @@
 		</div>
 	</section>
 
-	<!-- Upcoming queue -->
+	<!-- Queue + History -->
 	<section>
-		<div class="card bg-base-100">
-			<div class="card-body gap-4">
-				<h2 class="card-title text-sm font-semibold uppercase tracking-wide text-base-content/50">
-					Upcoming ({data.queue.length})
-				</h2>
+		<div class="card bg-base-100 overflow-hidden">
+			<!-- Tab bar -->
+			<div class="flex gap-5 px-6 pt-5 border-b border-base-200">
+				<button
+					type="button"
+					onclick={() => (queueTab = 'upcoming')}
+					class="pb-3 text-sm font-semibold border-b-2 -mb-px transition-colors
+						{queueTab === 'upcoming'
+							? 'border-primary text-base-content'
+							: 'border-transparent text-base-content/40 hover:text-base-content/70'}"
+				>
+					Upcoming{data.queue.length > 0 ? ` (${data.queue.length})` : ''}
+				</button>
+				<button
+					type="button"
+					onclick={() => (queueTab = 'history')}
+					class="pb-3 text-sm font-semibold border-b-2 -mb-px transition-colors
+						{queueTab === 'history'
+							? 'border-primary text-base-content'
+							: 'border-transparent text-base-content/40 hover:text-base-content/70'}"
+				>
+					History
+				</button>
+			</div>
 
-				{#if form?.cancelled}
-					<div role="alert" class="alert alert-success alert-soft text-sm">Post cancelled.</div>
-				{/if}
-				{#if form?.rescheduled}
-					<div role="alert" class="alert alert-success alert-soft text-sm">Post rescheduled.</div>
-				{/if}
-				{#if form?.captionEdited}
-					<div role="alert" class="alert alert-success alert-soft text-sm">Caption updated.</div>
-				{/if}
+			<div class="p-6 flex flex-col gap-4">
+				{#if queueTab === 'upcoming'}
+					{#if form?.cancelled}
+						<div role="alert" class="alert alert-success alert-soft text-sm">Post cancelled.</div>
+					{/if}
+					{#if form?.rescheduled}
+						<div role="alert" class="alert alert-success alert-soft text-sm">Post rescheduled.</div>
+					{/if}
+					{#if form?.captionEdited}
+						<div role="alert" class="alert alert-success alert-soft text-sm">Caption updated.</div>
+					{/if}
 
-				{#if data.queue.length === 0}
-					<p class="text-sm text-base-content/40">Nothing scheduled yet.</p>
-				{:else}
-					<ul class="list">
-						{#each data.queue as post}
-							<li class="list-row items-start py-3">
-								<!-- Thumbnail -->
-								<img
-									src={post.thumbnailUrl ?? post.mediaUrl}
-									alt=""
-									class="h-11 w-11 rounded-box object-cover shrink-0 mt-0.5"
-								/>
-								<!-- Info + actions -->
-								<div class="list-col-grow min-w-0">
-									<div class="flex flex-wrap items-center gap-1.5 mb-1">
-										<span class="badge badge-ghost badge-xs capitalize">{post.type}</span>
-										{#if post.status === 'publishing'}
-											<span class="badge badge-info badge-soft badge-xs">
-												<span class="loading loading-ring loading-xs"></span>
-												publishing
+					{#if data.queue.length === 0}
+						<p class="text-sm text-base-content/40">
+							Nothing scheduled yet.{#if data.history.length > 0}
+								{' '}<button
+									type="button"
+									onclick={() => (queueTab = 'history')}
+									class="underline underline-offset-2 hover:text-base-content/60 transition-colors"
+								>View recent history</button>
+							{/if}
+						</p>
+					{:else}
+						<ul class="list">
+							{#each data.queue as post}
+								<li class="list-row items-start py-3">
+									<!-- Thumbnail -->
+									<img
+										src={post.thumbnailUrl ?? post.mediaUrl}
+										alt=""
+										class="h-11 w-11 rounded-box object-cover shrink-0 mt-0.5"
+									/>
+									<!-- Info + actions -->
+									<div class="list-col-grow min-w-0">
+										<div class="flex flex-wrap items-center gap-1.5 mb-1">
+											<span class="badge badge-ghost badge-xs capitalize">{post.type}</span>
+											{#if post.status === 'publishing'}
+												<span class="badge badge-info badge-soft badge-xs">
+													<span class="loading loading-ring loading-xs"></span>
+													publishing
+												</span>
+											{/if}
+											<span class="text-xs font-medium text-base-content/80">{relativeTime(post.scheduledFor)}</span>
+											<span class="text-xs text-base-content/40">
+												{new Date(post.scheduledFor).toLocaleString(undefined, {
+													weekday: 'short', month: 'short', day: 'numeric',
+													hour: '2-digit', minute: '2-digit'
+												})}
 											</span>
+										</div>
+										{#if post.caption}
+											<p class="text-xs text-base-content/50 leading-snug mb-1.5 line-clamp-2">{post.caption}</p>
 										{/if}
-										<span class="text-xs font-medium text-base-content/80">{relativeTime(post.scheduledFor)}</span>
-										<span class="text-xs text-base-content/40">
-											{new Date(post.scheduledFor).toLocaleString(undefined, {
-												weekday: 'short', month: 'short', day: 'numeric',
-												hour: '2-digit', minute: '2-digit'
-											})}
-										</span>
-									</div>
-									{#if post.caption}
-										<p class="text-xs text-base-content/50 leading-snug mb-1.5 line-clamp-2">{post.caption}</p>
-									{/if}
-									{#if post.status === 'pending'}
-										<div class="flex flex-wrap items-center gap-1 mt-0.5">
-											<button
-												type="button"
-												onclick={() => openQueueItemPreview(post)}
-												class="btn btn-xs"
-											>Preview</button>
-											{#if post.type === 'feed'}
+										{#if post.status === 'pending'}
+											<div class="flex flex-wrap items-center gap-1 mt-0.5">
 												<button
 													type="button"
-													onclick={() => openEditCaption(post.id, post.caption)}
+													onclick={() => openQueueItemPreview(post)}
 													class="btn btn-xs"
-												>Caption</button>
-											{/if}
-											<button
-												type="button"
-												onclick={() => openReschedule(post.id, post.scheduledFor)}
-												class="btn btn-xs"
-											>Reschedule</button>
-											<form method="POST" action="?/cancel" use:enhance>
-												<input type="hidden" name="post_id" value={post.id} />
+												>Preview</button>
+												{#if post.type === 'feed' || post.type === 'carousel'}
+													<button
+														type="button"
+														onclick={() => openEditCaption(post.id, post.caption)}
+														class="btn btn-xs"
+													>Caption</button>
+												{/if}
 												<button
-													type="submit"
-													class="btn btn-xs btn-error btn-soft"
-													onclick={(e) => { if (!confirm('Cancel this scheduled post?')) e.preventDefault(); }}
-												>Cancel</button>
-											</form>
+													type="button"
+													onclick={() => openReschedule(post.id, post.scheduledFor)}
+													class="btn btn-xs"
+												>Reschedule</button>
+												<form
+													method="POST"
+													action="?/cancel"
+													use:enhance={() => {
+														cancelling = post.id;
+														return async ({ update }) => {
+															cancelling = null;
+															await update();
+														};
+													}}
+												>
+													<input type="hidden" name="post_id" value={post.id} />
+													<button
+														type="submit"
+														disabled={cancelling === post.id}
+														class="btn btn-xs btn-error btn-soft"
+														onclick={(e) => { if (!confirm('Cancel this scheduled post?')) e.preventDefault(); }}
+													>
+														{#if cancelling === post.id}
+															<span class="loading loading-spinner loading-xs"></span>
+														{/if}
+														Cancel
+													</button>
+												</form>
+											</div>
+										{/if}
+									</div>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				{:else}
+					{#if data.history.length === 0}
+						<p class="text-sm text-base-content/40">No recent post history.</p>
+					{:else}
+						<ul class="flex flex-col divide-y divide-base-200 -mx-6 -mt-4">
+							{#each data.history as post}
+								<li class="flex items-start gap-3 px-6 py-3.5">
+									<img
+										src={post.thumbnailUrl ?? post.mediaUrl}
+										alt=""
+										class="h-11 w-11 rounded-box object-cover shrink-0 mt-0.5"
+									/>
+									<div class="min-w-0 flex-1">
+										<div class="flex flex-wrap items-center gap-1.5 mb-0.5">
+											{#if post.status === 'published'}
+												<span class="badge badge-success badge-soft badge-xs">published</span>
+											{:else if post.status === 'failed'}
+												<span class="badge badge-error badge-soft badge-xs">failed</span>
+											{:else}
+												<span class="badge badge-ghost badge-xs">cancelled</span>
+											{/if}
+											<span class="badge badge-ghost badge-xs capitalize">{post.type}</span>
+											<span class="text-xs text-base-content/40">
+												{relativeTime(post.publishedAt ?? post.scheduledFor)}
+											</span>
 										</div>
-									{/if}
-								</div>
-							</li>
-						{/each}
-					</ul>
+										{#if post.caption}
+											<p class="text-xs text-base-content/50 line-clamp-1">{post.caption}</p>
+										{/if}
+										{#if post.errorMessage && post.status === 'failed'}
+											<p class="text-xs text-error line-clamp-1 mt-0.5">{post.errorMessage}</p>
+										{/if}
+									</div>
+								</li>
+							{/each}
+						</ul>
+						<a
+							href="/accounts/{data.account.id}/history"
+							class="text-xs text-base-content/40 hover:text-base-content/70 transition-colors self-start"
+						>View full history →</a>
+					{/if}
 				{/if}
 			</div>
 		</div>

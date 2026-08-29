@@ -21,7 +21,7 @@
 </div>
 
 <div role="tablist" class="tabs tabs-border mb-6">
-	<a role="tab" href={base} class="tab {isTab(base) && !isTab(`${base}/history`) && !isTab(`${base}/media`) ? 'tab-active' : ''}">
+	<a role="tab" href={base} class="tab {isTab(base) && !isTab(`${base}/history`) && !isTab(`${base}/media`) && !isTab(`${base}/settings`) ? 'tab-active' : ''}">
 		Schedule
 	</a>
 	<a role="tab" href="{base}/history" class="tab {isTab(`${base}/history`) ? 'tab-active' : ''}">
@@ -29,6 +29,9 @@
 	</a>
 	<a role="tab" href="{base}/media" class="tab {isTab(`${base}/media`) ? 'tab-active' : ''}">
 		Media library
+	</a>
+	<a role="tab" href="{base}/settings" class="tab {isTab(`${base}/settings`) ? 'tab-active' : ''}">
+		Settings
 	</a>
 </div>
 
