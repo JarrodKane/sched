@@ -88,16 +88,25 @@
 							{/if}
 						</td>
 						<td class="text-right">
-							<form method="POST" action="?/remove" use:enhance>
-								<input type="hidden" name="id" value={acct.id} />
-								<button
-									type="submit"
-									class="btn btn-ghost btn-xs text-error"
-									onclick={(e) => { if (!confirm('Remove this account?')) e.preventDefault(); }}
+							<div class="flex items-center justify-end gap-1">
+								<a
+									href="/admin/accounts/connect?account_id={acct.id}"
+									class="btn btn-ghost btn-xs"
+									title="Re-run Instagram OAuth to refresh this account's token"
 								>
-									Remove
-								</button>
-							</form>
+									Reconnect
+								</a>
+								<form method="POST" action="?/remove" use:enhance>
+									<input type="hidden" name="id" value={acct.id} />
+									<button
+										type="submit"
+										class="btn btn-ghost btn-xs text-error"
+										onclick={(e) => { if (!confirm('Remove this account?')) e.preventDefault(); }}
+									>
+										Remove
+									</button>
+								</form>
+							</div>
 						</td>
 					</tr>
 				{/each}

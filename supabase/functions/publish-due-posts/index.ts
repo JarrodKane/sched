@@ -3,8 +3,9 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const GRAPH_API_VERSION = 'v25.0';
-const BASE_URL = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
+// Instagram Business Login tokens are Instagram-scoped — use graph.instagram.com,
+// not graph.facebook.com (which requires Facebook-scoped tokens).
+const BASE_URL = 'https://graph.instagram.com';
 
 interface ScheduledPost {
 	id: string;

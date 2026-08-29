@@ -12,7 +12,10 @@ export const GET: RequestHandler = async ({ locals, cookies, url }) => {
 	const [profile] = await db.select().from(users).where(eq(users.id, user.id)).limit(1);
 	if (!profile?.isAdmin) redirect(303, '/dashboard');
 
-	const state = crypto.randomUUID();
+	// Optional: reconnecting a specific existing account by UUID
+	const accountId = url.searchParams.get('account_id') ?? '';
+
+	const state = `${crypto.randomUUID()}:${accountId}`;
 	cookies.set('ig_oauth_state', state, { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 600 });
 
 	const redirectUri = `${url.origin}/admin/accounts/connect/callback`;

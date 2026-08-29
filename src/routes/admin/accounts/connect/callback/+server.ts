@@ -12,13 +12,16 @@ export const GET: RequestHandler = async ({ locals, cookies, url }) => {
 	const [profile] = await db.select().from(users).where(eq(users.id, user.id)).limit(1);
 	if (!profile?.isAdmin) redirect(303, '/dashboard');
 
-	// Verify CSRF state
+	// Verify CSRF state (format: "{uuid}" or "{uuid}:{account_id}")
 	const state = url.searchParams.get('state');
 	const storedState = cookies.get('ig_oauth_state');
 	cookies.delete('ig_oauth_state', { path: '/' });
 	if (!state || state !== storedState) {
 		redirect(303, '/admin/accounts?error=' + encodeURIComponent('Invalid state — please try again'));
 	}
+
+	// Extract optional account UUID embedded in state
+	const [, targetAccountId] = state.split(':');
 
 	const code = url.searchParams.get('code');
 	if (!code) {
@@ -83,18 +86,26 @@ export const GET: RequestHandler = async ({ locals, cookies, url }) => {
 		const expiresAt = llData.expires_in ? new Date(Date.now() + llData.expires_in * 1000) : null;
 		const label = igData.username ? `@${igData.username}` : (igData.name ?? igData.id);
 
-		const [existing] = await db
-			.select({ id: socialAccounts.id })
-			.from(socialAccounts)
-			.where(eq(socialAccounts.igBusinessId, igData.id))
-			.limit(1);
+		// If a specific account UUID was passed (via the Reconnect button), update that account directly.
+		// Otherwise fall back to matching on ig_business_id.
+		const [existing] = targetAccountId
+			? await db
+				.select({ id: socialAccounts.id })
+				.from(socialAccounts)
+				.where(eq(socialAccounts.id, targetAccountId))
+				.limit(1)
+			: await db
+				.select({ id: socialAccounts.id })
+				.from(socialAccounts)
+				.where(eq(socialAccounts.igBusinessId, igData.id))
+				.limit(1);
 
 		let message: string;
 		if (existing) {
 			await db
 				.update(socialAccounts)
-				.set({ accessToken: llData.access_token, tokenExpiresAt: expiresAt, label })
-				.where(eq(socialAccounts.igBusinessId, igData.id));
+				.set({ accessToken: llData.access_token, tokenExpiresAt: expiresAt, label, igBusinessId: igData.id })
+				.where(eq(socialAccounts.id, existing.id));
 			message = `Token refreshed: ${label}`;
 		} else {
 			await db.insert(socialAccounts).values({
