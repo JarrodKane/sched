@@ -1,24 +1,8 @@
-@import 'tailwindcss';
-
-:root {
-	--color-bg: #ffffff;
-	--color-text: #09090b;
-}
-
-@media (prefers-color-scheme: dark) {
-	:root:not([data-theme='light']) {
-		--color-bg: #09090b;
-		--color-text: #fafafa;
-	}
-}
-
-:root[data-theme='dark'] {
-	--color-bg: #09090b;
-	--color-text: #fafafa;
+@import "tailwindcss";
+@plugin "daisyui" {
+  themes: bumblebee --default, abyss --prefersdark;
 }
 
 body {
-	background-color: var(--color-bg);
-	color: var(--color-text);
-	font-family: system-ui, -apple-system, sans-serif;
+  font-family: system-ui, -apple-system, sans-serif;
 }

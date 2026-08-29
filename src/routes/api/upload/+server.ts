@@ -3,7 +3,7 @@ import { supabaseAdmin } from '$lib/server/supabase-admin';
 import type { RequestHandler } from './$types';
 
 const BUCKET = 'media';
-const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_SIZE_BYTES = 3 * 1024 * 1024; // 3 MB
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const { user } = await locals.safeGetSession();
@@ -11,14 +11,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	const form = await request.formData();
 	const file = form.get('file') as File | null;
+	const thumbnail = form.get('thumbnail') as File | null;
 	const accountId = form.get('account_id') as string | null;
 
 	if (!file || !accountId) error(400, 'Missing file or account_id');
 	if (!file.type.startsWith('image/')) error(400, 'Only image files are supported');
-	if (file.size > MAX_SIZE_BYTES) error(400, 'File too large (max 10 MB)');
+	if (file.size > MAX_SIZE_BYTES) error(400, 'File too large (max 3 MB)');
 
+	const timestamp = Date.now();
 	const ext = file.name.split('.').pop() ?? 'jpg';
-	const path = `${accountId}/${Date.now()}.${ext}`;
+	const path = `${accountId}/${timestamp}.${ext}`;
 	const buffer = await file.arrayBuffer();
 
 	const { error: uploadError } = await supabaseAdmin.storage
@@ -31,5 +33,24 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	const { data } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(path);
-	return json({ url: data.publicUrl });
+
+	// Upload thumbnail to _thumbs/ prefix so it doesn't appear in the media library
+	let thumbnailUrl: string | null = null;
+	if (thumbnail && thumbnail.size > 0 && thumbnail.type.startsWith('image/')) {
+		try {
+			const thumbPath = `_thumbs/${accountId}/${timestamp}_thumb.jpg`;
+			const thumbBuffer = await thumbnail.arrayBuffer();
+			const { error: thumbErr } = await supabaseAdmin.storage
+				.from(BUCKET)
+				.upload(thumbPath, thumbBuffer, { contentType: 'image/jpeg', upsert: false });
+			if (!thumbErr) {
+				const { data: thumbData } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(thumbPath);
+				thumbnailUrl = thumbData.publicUrl;
+			}
+		} catch {
+			// Thumbnail is best-effort — don't fail the whole upload
+		}
+	}
+
+	return json({ url: data.publicUrl, thumbnailUrl });
 };

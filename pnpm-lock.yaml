@@ -14,6 +14,9 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.112.4
         version: 2.112.4
+      cropperjs:
+        specifier: ^1.6.3
+        version: 1.6.3
     devDependencies:
       '@eslint/js':
         specifier: ^10.0.1
@@ -39,6 +42,9 @@ importers:
       '@vitest/browser-playwright':
         specifier: ^4.1.8
         version: 4.1.11(playwright@1.62.1)(vite@8.2.2(@types/node@22.20.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))(vitest@4.1.11)
+      daisyui:
+        specifier: ^5.7.22
+        version: 5.7.22
       drizzle-kit:
         specifier: ^0.31.10
         version: 0.31.10
@@ -1152,6 +1158,9 @@ packages:
     resolution: {integrity: sha512-ei8Aos7ja0weRpFzJnEA9UHJ/7XQmqglbRwnf2ATjcB9Wq874VKH9kfjjirM6UhU2/E5fFYadylyhFldcqSidQ==}
     engines: {node: '>=18'}
 
+  cropperjs@1.6.3:
+    resolution: {integrity: sha512-BRb0PRIzjbfM5n+i6L2D85pSbXI/w6cnnwb9W9cRKgAmbiP+OjDeq+Irhd86IujZDXm/7JWECfscllFIdrlmfw==}
+
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
     engines: {node: '>= 8'}
@@ -1160,6 +1169,9 @@ packages:
     resolution: {integrity: sha512-/Tb/JcjK111nNScGob5MNtsntNM1aCNUDipB/TkwZFhyDrrE47SOx/18wF2bbjgc3ZzCSKW1T5nt5EbFoAz/Vg==}
     engines: {node: '>=4'}
     hasBin: true
+
+  daisyui@5.7.22:
+    resolution: {integrity: sha512-pYii+2NCN0+OIL6Lpuc054LK0QJeNv+GRK9UzN1GRmjdYhYO6WFl0QLoj5oPcitPD7o+okiiI0SKFkn641TxmA==}
 
   debug@4.4.3:
     resolution: {integrity: sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==}
@@ -3012,6 +3024,8 @@ snapshots:
 
   cookie@1.1.1: {}
 
+  cropperjs@1.6.3: {}
+
   cross-spawn@7.0.6:
     dependencies:
       path-key: 3.1.1
@@ -3019,6 +3033,8 @@ snapshots:
       which: 2.0.2
 
   cssesc@3.0.0: {}
+
+  daisyui@5.7.22: {}
 
   debug@4.4.3:
     dependencies:

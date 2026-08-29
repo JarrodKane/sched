@@ -29,7 +29,7 @@ export const GET: RequestHandler = async ({ locals, cookies, url }) => {
 	try {
 		const redirectUri = `${url.origin}/admin/accounts/connect/callback`;
 
-		// Exchange code for short-lived Instagram user token (POST)
+		// Exchange code for short-lived Instagram user token
 		const tokenRes = await fetch('https://api.instagram.com/oauth/access_token', {
 			method: 'POST',
 			body: new URLSearchParams({
@@ -81,44 +81,36 @@ export const GET: RequestHandler = async ({ locals, cookies, url }) => {
 		if (!igData.id) throw new Error('No Instagram account returned');
 
 		const expiresAt = llData.expires_in ? new Date(Date.now() + llData.expires_in * 1000) : null;
-		const added: string[] = [];
-		const refreshed: string[] = [];
+		const label = igData.username ? `@${igData.username}` : (igData.name ?? igData.id);
 
-		const igId = igData.id;
-		const label = igData.username ? `@${igData.username}` : (igData.name ?? igId);
-
-		const existing = await db
+		const [existing] = await db
 			.select({ id: socialAccounts.id })
 			.from(socialAccounts)
-			.where(eq(socialAccounts.igBusinessId, igId))
+			.where(eq(socialAccounts.igBusinessId, igData.id))
 			.limit(1);
 
-		if (existing.length > 0) {
+		let message: string;
+		if (existing) {
 			await db
 				.update(socialAccounts)
 				.set({ accessToken: llData.access_token, tokenExpiresAt: expiresAt, label })
-				.where(eq(socialAccounts.igBusinessId, igId));
-			refreshed.push(label);
+				.where(eq(socialAccounts.igBusinessId, igData.id));
+			message = `Token refreshed: ${label}`;
 		} else {
 			await db.insert(socialAccounts).values({
 				platform: 'instagram',
 				label,
-				igBusinessId: igId,
-				fbPageId: igId,
+				igBusinessId: igData.id,
+				fbPageId: igData.id,
 				accessToken: llData.access_token,
 				tokenExpiresAt: expiresAt
 			});
-			added.push(label);
+			message = `Connected: ${label}`;
 		}
-
-		let message = '';
-		if (added.length) message += `Connected: ${added.join(', ')}`;
-		if (refreshed.length) message += (message ? '. ' : '') + `Token refreshed: ${refreshed.join(', ')}`;
-		if (!message) message = 'No Instagram Business accounts found on this Facebook account';
 
 		redirect(303, '/admin/accounts?message=' + encodeURIComponent(message));
 	} catch (err) {
-		const msg = err instanceof Error ? err.message : 'Connection failed';
-		redirect(303, '/admin/accounts?error=' + encodeURIComponent(msg));
+		if (!(err instanceof Error)) throw err; // re-throw SvelteKit redirects
+		redirect(303, '/admin/accounts?error=' + encodeURIComponent(err.message));
 	}
 };

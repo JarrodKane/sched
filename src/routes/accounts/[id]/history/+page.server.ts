@@ -1,7 +1,7 @@
 import { error, redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { socialAccounts, scheduledPosts } from '$lib/server/db/schema';
-import { eq, and, inArray, desc } from 'drizzle-orm';
+import { eq, and, inArray, desc, gte } from 'drizzle-orm';
 import { canAccessAccount } from '$lib/server/access';
 import type { PageServerLoad } from './$types';
 
@@ -19,13 +19,16 @@ export const load: PageServerLoad = async ({ params, parent }) => {
 		.limit(1);
 	if (!account) error(404, 'Account not found');
 
+	const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
 	const posts = await db
 		.select()
 		.from(scheduledPosts)
 		.where(
 			and(
 				eq(scheduledPosts.accountId, params.id),
-				inArray(scheduledPosts.status, ['published', 'failed'])
+				inArray(scheduledPosts.status, ['published', 'failed', 'cancelled']),
+				gte(scheduledPosts.scheduledFor, thirtyDaysAgo)
 			)
 		)
 		.orderBy(desc(scheduledPosts.scheduledFor))

@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, boolean, timestamp, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, boolean, timestamp, primaryKey, integer } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
 	id: uuid('id').primaryKey(),
@@ -42,8 +42,20 @@ export const scheduledPosts = pgTable('scheduled_posts', {
 	caption: text('caption'),
 	mediaUrl: text('media_url').notNull(),
 	scheduledFor: timestamp('scheduled_for', { withTimezone: true }).notNull(),
-	status: text('status').notNull().default('pending'), // 'pending' | 'publishing' | 'published' | 'failed'
+	status: text('status').notNull().default('pending'), // 'pending' | 'publishing' | 'published' | 'failed' | 'cancelled'
 	errorMessage: text('error_message'),
+	thumbnailUrl: text('thumbnail_url'),
 	publishedAt: timestamp('published_at', { withTimezone: true }),
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+export const captionSnippets = pgTable('caption_snippets', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	accountId: uuid('account_id')
+		.notNull()
+		.references(() => socialAccounts.id, { onDelete: 'cascade' }),
+	label: text('label').notNull(),
+	text: text('text').notNull(),
+	sortOrder: integer('sort_order').notNull().default(0),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });

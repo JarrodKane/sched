@@ -9,66 +9,63 @@
 <svelte:head><title>Sign in — IG Scheduler</title></svelte:head>
 
 <div class="flex min-h-[80vh] items-center justify-center">
-	<div class="w-full max-w-sm">
-		<h1 class="mb-8 text-2xl font-bold text-zinc-900 dark:text-white">IG Scheduler</h1>
+	<div class="card bg-base-100 w-full max-w-sm shadow-xl">
+		<div class="card-body gap-5">
+			<div class="flex items-center gap-2 mb-1">
+					<span class="text-primary font-black text-2xl leading-none">●</span>
+					<h1 class="card-title text-2xl">IG Scheduler</h1>
+				</div>
 
-		<form
-			method="POST"
-			action="?/login"
-			use:enhance={() => {
-				loading = true;
-				return async ({ update }) => {
-					loading = false;
-					await update();
-				};
-			}}
-			class="space-y-4"
-		>
-			{#if form?.error}
-				<p class="rounded bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-					{form.error}
-				</p>
-			{/if}
-
-			<div>
-				<label for="email" class="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-					Email
-				</label>
-				<input
-					id="email"
-					name="email"
-					type="email"
-					autocomplete="email"
-					required
-					class="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder-zinc-500 dark:focus:border-zinc-400"
-					placeholder="you@example.com"
-				/>
-			</div>
-
-			<div>
-				<label
-					for="password"
-					class="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-				>
-					Password
-				</label>
-				<input
-					id="password"
-					name="password"
-					type="password"
-					autocomplete="current-password"
-					required
-					class="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder-zinc-500 dark:focus:border-zinc-400"
-				/>
-			</div>
-
-			<button
-				type="submit"
-				disabled={loading}
-				class="w-full rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+			<form
+				method="POST"
+				action="?/login"
+				use:enhance={() => {
+					loading = true;
+					return async ({ update }) => {
+						loading = false;
+						await update();
+					};
+				}}
+				class="flex flex-col gap-4"
 			>
-				{loading ? 'Signing in…' : 'Sign in'}
-			</button>
-		</form>
+				{#if form?.error}
+					<div role="alert" class="alert alert-error alert-soft text-sm">
+						{form.error}
+					</div>
+				{/if}
+
+				<fieldset class="fieldset">
+					<legend class="fieldset-legend">Email</legend>
+					<input
+						id="email"
+						name="email"
+						type="email"
+						autocomplete="email"
+						required
+						class="input w-full"
+						placeholder="you@example.com"
+					/>
+				</fieldset>
+
+				<fieldset class="fieldset">
+					<legend class="fieldset-legend">Password</legend>
+					<input
+						id="password"
+						name="password"
+						type="password"
+						autocomplete="current-password"
+						required
+						class="input w-full"
+					/>
+				</fieldset>
+
+				<button type="submit" disabled={loading} class="btn btn-primary btn-block mt-1">
+					{#if loading}
+						<span class="loading loading-spinner loading-sm"></span>
+					{/if}
+					{loading ? 'Signing in…' : 'Sign in'}
+				</button>
+			</form>
+		</div>
 	</div>
 </div>

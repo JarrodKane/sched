@@ -1,43 +1,53 @@
-const GRAPH_API_VERSION = 'v25.0';
-const BASE_URL = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
+const BASE = 'https://graph.instagram.com';
+
+export type PostType = 'feed' | 'story';
+
+export interface PublishResult {
+	igPostId: string;
+}
 
 export async function publishPost(
-	account: { igBusinessId: string; accessToken: string },
-	post: { type: 'feed' | 'story'; mediaUrl: string; caption?: string | null }
-): Promise<string> {
-	// Step 1: create media container
-	const createParams = new URLSearchParams({
-		access_token: account.accessToken,
-		image_url: post.mediaUrl
-	});
-	if (post.type === 'story') {
-		createParams.set('media_type', 'STORIES');
-	} else if (post.caption) {
-		createParams.set('caption', post.caption);
+	igBusinessId: string,
+	accessToken: string,
+	type: PostType,
+	imageUrl: string,
+	caption?: string | null
+): Promise<PublishResult> {
+	const containerParams: Record<string, string> = {
+		image_url: imageUrl,
+		access_token: accessToken
+	};
+
+	if (type === 'story') {
+		containerParams.media_type = 'STORIES';
+	} else if (caption) {
+		containerParams.caption = caption;
 	}
 
-	const createRes = await fetch(`${BASE_URL}/${account.igBusinessId}/media`, {
+	const containerRes = await fetch(`${BASE}/${igBusinessId}/media`, {
 		method: 'POST',
-		body: createParams
+		body: new URLSearchParams(containerParams)
 	});
-	const createData = (await createRes.json()) as { id?: string; error?: { message: string } };
-	if (!createData.id) {
-		throw new Error(createData.error?.message ?? 'Failed to create Instagram media container');
-	}
+	const containerData = (await containerRes.json()) as {
+		id?: string;
+		error?: { message: string };
+	};
+	if (!containerData.id)
+		throw new Error(containerData.error?.message ?? 'Failed to create media container');
 
-	// Step 2: publish the container
-	const publishParams = new URLSearchParams({
-		creation_id: createData.id,
-		access_token: account.accessToken
-	});
-	const publishRes = await fetch(`${BASE_URL}/${account.igBusinessId}/media_publish`, {
+	const publishRes = await fetch(`${BASE}/${igBusinessId}/media_publish`, {
 		method: 'POST',
-		body: publishParams
+		body: new URLSearchParams({
+			creation_id: containerData.id,
+			access_token: accessToken
+		})
 	});
-	const publishData = (await publishRes.json()) as { id?: string; error?: { message: string } };
-	if (!publishData.id) {
-		throw new Error(publishData.error?.message ?? 'Failed to publish Instagram media');
-	}
+	const publishData = (await publishRes.json()) as {
+		id?: string;
+		error?: { message: string };
+	};
+	if (!publishData.id)
+		throw new Error(publishData.error?.message ?? 'Failed to publish post');
 
-	return publishData.id;
+	return { igPostId: publishData.id };
 }

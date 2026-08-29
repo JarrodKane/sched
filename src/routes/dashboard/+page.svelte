@@ -6,21 +6,40 @@
 
 <svelte:head><title>Dashboard — IG Scheduler</title></svelte:head>
 
-<h1 class="mb-6 text-xl font-semibold text-zinc-900 dark:text-white">Your accounts</h1>
+<div class="mb-8 flex items-center justify-between">
+	<h1 class="text-2xl font-bold">Your accounts</h1>
+</div>
 
 {#if data.accounts.length === 0}
-	<p class="text-sm text-zinc-500 dark:text-zinc-400">
+	<div role="alert" class="alert alert-soft">
 		No accounts assigned yet. Ask an admin to grant you access.
-	</p>
+	</div>
 {:else}
 	<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 		{#each data.accounts as account}
 			<a
 				href="/accounts/{account.id}"
-				class="flex flex-col gap-2 rounded-lg border border-zinc-200 bg-white p-5 transition hover:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-600"
+				class="card bg-base-100 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-150"
 			>
-				<span class="font-medium text-zinc-900 dark:text-white">{account.label}</span>
-				<span class="text-xs uppercase tracking-wide text-zinc-400">{account.platform}</span>
+				<div class="card-body gap-4">
+					<div class="flex items-center gap-3">
+						<div class="w-10 h-10 rounded-full bg-linear-to-tr from-yellow-400 via-pink-500 to-purple-600 shrink-0"></div>
+						<div class="min-w-0">
+							<h2 class="font-semibold truncate">{account.label}</h2>
+							<span class="text-xs text-base-content/40 uppercase tracking-wide">{account.platform}</span>
+						</div>
+					</div>
+					<div class="flex items-center justify-between">
+						{#if account.pendingCount > 0}
+							<span class="badge badge-primary badge-soft badge-sm">
+								{account.pendingCount} scheduled
+							</span>
+						{:else}
+							<span class="text-xs text-base-content/40">Nothing scheduled</span>
+						{/if}
+						<span class="text-xs text-primary font-medium">Open →</span>
+					</div>
+				</div>
 			</a>
 		{/each}
 	</div>

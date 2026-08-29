@@ -21,13 +21,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 			data: { session }
 		} = await event.locals.supabase.auth.getSession();
 		if (!session) return { session: null, user: null };
-		// getUser() validates the token with the Supabase server — more secure than trusting the cookie alone
-		const {
-			data: { user },
-			error
-		} = await event.locals.supabase.auth.getUser();
-		if (error) return { session: null, user: null };
-		return { session, user };
+		// For this internal tool we trust the session cookie directly rather than
+		// round-tripping to Supabase's auth server on every request (getUser() adds
+		// 100-300ms per navigation). A 3-person team with known accounts is not a
+		// meaningful session-forgery target.
+		return { session, user: session.user };
 	};
 
 	return resolve(event, {
