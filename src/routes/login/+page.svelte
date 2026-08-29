@@ -54,6 +54,9 @@
 						name="password"
 						type="password"
 						autocomplete="current-password"
+						autocorrect="off"
+						autocapitalize="off"
+						spellcheck="false"
 						required
 						class="input w-full"
 					/>

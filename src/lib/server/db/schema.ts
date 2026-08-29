@@ -38,9 +38,11 @@ export const scheduledPosts = pgTable('scheduled_posts', {
 	createdBy: uuid('created_by')
 		.notNull()
 		.references(() => users.id),
-	type: text('type').notNull(), // 'feed' | 'story'
+	type: text('type').notNull(), // 'feed' | 'story' | 'carousel'
 	caption: text('caption'),
 	mediaUrl: text('media_url').notNull(),
+	carouselItems: text('carousel_items'), // JSON: string[] of media URLs (carousel type only)
+	userTags: text('user_tags'), // JSON: string[] of IG usernames to tag
 	scheduledFor: timestamp('scheduled_for', { withTimezone: true }).notNull(),
 	status: text('status').notNull().default('pending'), // 'pending' | 'publishing' | 'published' | 'failed' | 'cancelled'
 	errorMessage: text('error_message'),
@@ -56,6 +58,17 @@ export const captionSnippets = pgTable('caption_snippets', {
 		.references(() => socialAccounts.id, { onDelete: 'cascade' }),
 	label: text('label').notNull(),
 	text: text('text').notNull(),
+	sortOrder: integer('sort_order').notNull().default(0),
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+export const tagSnippets = pgTable('tag_snippets', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	accountId: uuid('account_id')
+		.notNull()
+		.references(() => socialAccounts.id, { onDelete: 'cascade' }),
+	label: text('label').notNull(),
+	username: text('username').notNull(),
 	sortOrder: integer('sort_order').notNull().default(0),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });

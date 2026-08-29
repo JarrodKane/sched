@@ -9,9 +9,11 @@ const BASE_URL = 'https://graph.instagram.com';
 
 interface ScheduledPost {
 	id: string;
-	type: 'feed' | 'story';
+	type: 'feed' | 'story' | 'carousel';
 	caption: string | null;
 	media_url: string;
+	carousel_items: string | null; // JSON: string[]
+	user_tags: string | null; // JSON: string[]
 	account_id: string;
 }
 
@@ -39,45 +41,89 @@ async function waitForContainerReady(
 	throw new Error('Instagram media container timed out (still processing after ~24s)');
 }
 
+async function createMediaContainer(
+	igBusinessId: string,
+	accessToken: string,
+	params: Record<string, string>
+): Promise<string> {
+	const body = new URLSearchParams({ access_token: accessToken, ...params });
+	const res = await fetch(`${BASE_URL}/${igBusinessId}/media`, { method: 'POST', body });
+	const data = await res.json();
+	if (!data.id) throw new Error(data.error?.message ?? 'Failed to create Instagram media container');
+	return data.id as string;
+}
+
 async function publishToInstagram(
 	account: SocialAccount,
 	post: ScheduledPost
 ): Promise<string> {
-	const createParams = new URLSearchParams({
-		access_token: account.access_token,
-		image_url: post.media_url
-	});
+	if (post.type === 'carousel') {
+		return publishCarousel(account, post);
+	}
+
+	const params: Record<string, string> = { image_url: post.media_url };
 	if (post.type === 'story') {
-		createParams.set('media_type', 'STORIES');
-	} else if (post.caption) {
-		createParams.set('caption', post.caption);
+		params.media_type = 'STORIES';
+	} else {
+		if (post.caption) params.caption = post.caption;
+		if (post.user_tags) {
+			const usernames: string[] = JSON.parse(post.user_tags);
+			if (usernames.length > 0) {
+				params.user_tags = JSON.stringify(usernames.map((u) => ({ username: u, x: 0.5, y: 0.5 })));
+			}
+		}
 	}
 
-	const createRes = await fetch(`${BASE_URL}/${account.ig_business_id}/media`, {
-		method: 'POST',
-		body: createParams
-	});
-	const createData = await createRes.json();
-	if (!createData.id) {
-		throw new Error(createData.error?.message ?? 'Failed to create Instagram media container');
-	}
+	const containerId = await createMediaContainer(account.ig_business_id, account.access_token, params);
+	await waitForContainerReady(containerId, account.access_token);
 
-	// Wait for Instagram to finish processing the image before publishing
-	await waitForContainerReady(createData.id, account.access_token);
-
-	const publishParams = new URLSearchParams({
-		creation_id: createData.id,
-		access_token: account.access_token
-	});
+	const publishBody = new URLSearchParams({ creation_id: containerId, access_token: account.access_token });
 	const publishRes = await fetch(`${BASE_URL}/${account.ig_business_id}/media_publish`, {
 		method: 'POST',
-		body: publishParams
+		body: publishBody
 	});
 	const publishData = await publishRes.json();
-	if (!publishData.id) {
-		throw new Error(publishData.error?.message ?? 'Failed to publish Instagram media');
+	if (!publishData.id) throw new Error(publishData.error?.message ?? 'Failed to publish Instagram media');
+	return publishData.id as string;
+}
+
+async function publishCarousel(account: SocialAccount, post: ScheduledPost): Promise<string> {
+	const urls: string[] = JSON.parse(post.carousel_items ?? '[]');
+	if (urls.length < 2) throw new Error('Carousel requires at least 2 images');
+
+	// Step 1: create a container for each image
+	const itemIds: string[] = [];
+	for (const url of urls) {
+		const id = await createMediaContainer(account.ig_business_id, account.access_token, {
+			image_url: url,
+			is_carousel_item: 'true'
+		});
+		itemIds.push(id);
 	}
 
+	// Wait for all item containers to finish processing
+	for (const id of itemIds) {
+		await waitForContainerReady(id, account.access_token);
+	}
+
+	// Step 2: create carousel container
+	const carouselParams: Record<string, string> = {
+		media_type: 'CAROUSEL',
+		children: itemIds.join(',')
+	};
+	if (post.caption) carouselParams.caption = post.caption;
+
+	const carouselId = await createMediaContainer(account.ig_business_id, account.access_token, carouselParams);
+	await waitForContainerReady(carouselId, account.access_token);
+
+	// Step 3: publish
+	const publishBody = new URLSearchParams({ creation_id: carouselId, access_token: account.access_token });
+	const publishRes = await fetch(`${BASE_URL}/${account.ig_business_id}/media_publish`, {
+		method: 'POST',
+		body: publishBody
+	});
+	const publishData = await publishRes.json();
+	if (!publishData.id) throw new Error(publishData.error?.message ?? 'Failed to publish carousel');
 	return publishData.id as string;
 }
 
@@ -89,7 +135,7 @@ Deno.serve(async () => {
 	// Fetch due pending posts
 	const { data: duePosts, error: fetchError } = await supabase
 		.from('scheduled_posts')
-		.select('id, type, caption, media_url, account_id')
+		.select('id, type, caption, media_url, carousel_items, user_tags, account_id')
 		.eq('status', 'pending')
 		.lte('scheduled_for', new Date().toISOString());
 

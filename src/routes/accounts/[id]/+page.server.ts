@@ -1,7 +1,7 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { users, socialAccounts, scheduledPosts, captionSnippets } from '$lib/server/db/schema';
-import { eq, and, asc, inArray, desc } from 'drizzle-orm';
+import { users, socialAccounts, scheduledPosts, captionSnippets, tagSnippets } from '$lib/server/db/schema';
+import { eq, and, asc, inArray } from 'drizzle-orm';
 import { canAccessAccount, canModifyPost } from '$lib/server/access';
 import { supabaseAdmin } from '$lib/server/supabase-admin';
 import type { Actions, PageServerLoad } from './$types';
@@ -18,7 +18,7 @@ export const load: PageServerLoad = async ({ params, parent }) => {
 	if (!profile) redirect(303, '/login');
 
 	// Run all independent queries in parallel after the profile is resolved
-	const [allowed, accountRows, queue, storageResult, snippets] = await Promise.all([
+	const [allowed, accountRows, queue, storageResult, snippets, tags] = await Promise.all([
 		canAccessAccount(profile.id, params.id, profile.isAdmin),
 		db.select().from(socialAccounts).where(eq(socialAccounts.id, params.id)).limit(1),
 		db
@@ -33,7 +33,12 @@ export const load: PageServerLoad = async ({ params, parent }) => {
 			.select()
 			.from(captionSnippets)
 			.where(eq(captionSnippets.accountId, params.id))
-			.orderBy(asc(captionSnippets.sortOrder), asc(captionSnippets.createdAt))
+			.orderBy(asc(captionSnippets.sortOrder), asc(captionSnippets.createdAt)),
+		db
+			.select()
+			.from(tagSnippets)
+			.where(eq(tagSnippets.accountId, params.id))
+			.orderBy(asc(tagSnippets.sortOrder), asc(tagSnippets.createdAt))
 	]);
 
 	if (!allowed) error(403, 'Access denied');
@@ -45,7 +50,7 @@ export const load: PageServerLoad = async ({ params, parent }) => {
 		url: supabaseAdmin.storage.from('media').getPublicUrl(`${params.id}/${f.name}`).data.publicUrl
 	}));
 
-	return { account, queue, priorUploads, snippets };
+	return { account, queue, priorUploads, snippets, tagSnippets: tags };
 };
 
 export const actions: Actions = {
@@ -62,15 +67,23 @@ export const actions: Actions = {
 		const mediaUrl = form.get('media_url') as string;
 		const scheduledFor = form.get('scheduled_for') as string;
 		const thumbnailUrl = (form.get('thumbnail_url') as string | null) || null;
+		const userTagsRaw = (form.get('user_tags') as string | null) || null;
+		const carouselItemsRaw = (form.get('carousel_items') as string | null) || null;
 
 		if (!type || !mediaUrl || !scheduledFor) {
 			return fail(400, { error: 'Missing required fields.' });
 		}
-		if (type !== 'feed' && type !== 'story') {
+		if (type !== 'feed' && type !== 'story' && type !== 'carousel') {
 			return fail(400, { error: 'Invalid post type.' });
 		}
 		if (!mediaUrl.startsWith('https://')) {
 			return fail(400, { error: 'Invalid media URL.' });
+		}
+		if (type === 'carousel') {
+			let items: string[];
+			try { items = JSON.parse(carouselItemsRaw ?? '[]'); } catch { return fail(400, { error: 'Invalid carousel data.' }); }
+			if (!Array.isArray(items) || items.length < 2) return fail(400, { error: 'Carousel needs at least 2 images.' });
+			if (items.length > 10) return fail(400, { error: 'Carousel supports up to 10 images.' });
 		}
 
 		const scheduledDate = new Date(scheduledFor);
@@ -82,8 +95,10 @@ export const actions: Actions = {
 			accountId: params.id,
 			createdBy: profile.id,
 			type,
-			caption: type === 'feed' ? (caption || null) : null,
+			caption: (type === 'feed' || type === 'carousel') ? (caption || null) : null,
 			mediaUrl,
+			carouselItems: type === 'carousel' ? carouselItemsRaw : null,
+			userTags: type !== 'story' ? (userTagsRaw || null) : null,
 			thumbnailUrl,
 			scheduledFor: scheduledDate,
 			status: 'pending'
@@ -200,10 +215,18 @@ export const actions: Actions = {
 		const caption = form.get('caption') as string | null;
 		const mediaUrl = form.get('media_url') as string;
 		const thumbnailUrl = (form.get('thumbnail_url') as string | null) || null;
+		const userTagsRaw = (form.get('user_tags') as string | null) || null;
+		const carouselItemsRaw = (form.get('carousel_items') as string | null) || null;
 
 		if (!type || !mediaUrl) return fail(400, { error: 'Missing required fields.' });
-		if (type !== 'feed' && type !== 'story') return fail(400, { error: 'Invalid post type.' });
+		if (type !== 'feed' && type !== 'story' && type !== 'carousel') return fail(400, { error: 'Invalid post type.' });
 		if (!mediaUrl.startsWith('https://')) return fail(400, { error: 'Invalid media URL.' });
+		if (type === 'carousel') {
+			let items: string[];
+			try { items = JSON.parse(carouselItemsRaw ?? '[]'); } catch { return fail(400, { error: 'Invalid carousel data.' }); }
+			if (!Array.isArray(items) || items.length < 2) return fail(400, { error: 'Carousel needs at least 2 images.' });
+			if (items.length > 10) return fail(400, { error: 'Carousel supports up to 10 images.' });
+		}
 
 		// Insert as pending with scheduled_for = now — the Edge Function picks it up within 60s.
 		// Avoids running the full publish flow (including Instagram container polling) inside a
@@ -212,8 +235,10 @@ export const actions: Actions = {
 			accountId: params.id,
 			createdBy: profile.id,
 			type,
-			caption: type === 'feed' ? (caption || null) : null,
+			caption: (type === 'feed' || type === 'carousel') ? (caption || null) : null,
 			mediaUrl,
+			carouselItems: type === 'carousel' ? carouselItemsRaw : null,
+			userTags: type !== 'story' ? (userTagsRaw || null) : null,
 			thumbnailUrl,
 			scheduledFor: new Date(),
 			status: 'pending'

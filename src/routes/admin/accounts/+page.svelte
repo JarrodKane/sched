@@ -4,6 +4,9 @@
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
+	// Track which snippet text areas are expanded (for multiline preview)
+	let snippetExpanded = $state<Record<string, boolean>>({});
+
 	const EXPIRY_WARN_DAYS = 7;
 
 	function isExpiringSoon(expiresAt: Date | string | null): boolean {
@@ -51,13 +54,22 @@
 	<div role="alert" class="alert alert-success alert-soft mb-4 text-sm">Account removed.</div>
 {/if}
 {#if form?.snippetAdded}
-	<div role="alert" class="alert alert-success alert-soft mb-4 text-sm">Snippet added.</div>
+	<div role="alert" class="alert alert-success alert-soft mb-4 text-sm">Caption snippet added.</div>
 {/if}
 {#if form?.snippetDeleted}
-	<div role="alert" class="alert alert-success alert-soft mb-4 text-sm">Snippet deleted.</div>
+	<div role="alert" class="alert alert-success alert-soft mb-4 text-sm">Caption snippet deleted.</div>
 {/if}
 {#if form?.snippetError}
 	<div role="alert" class="alert alert-error alert-soft mb-4 text-sm">{form.snippetError}</div>
+{/if}
+{#if form?.tagSnippetAdded}
+	<div role="alert" class="alert alert-success alert-soft mb-4 text-sm">Tag saved.</div>
+{/if}
+{#if form?.tagSnippetDeleted}
+	<div role="alert" class="alert alert-success alert-soft mb-4 text-sm">Tag deleted.</div>
+{/if}
+{#if form?.tagSnippetError}
+	<div role="alert" class="alert alert-error alert-soft mb-4 text-sm">{form.tagSnippetError}</div>
 {/if}
 
 <!-- Accounts table -->
@@ -119,7 +131,7 @@
 <section class="mb-12">
 	<h2 class="mb-1 text-sm font-semibold uppercase tracking-wide text-base-content/50">Caption snippets</h2>
 	<p class="mb-5 text-sm text-base-content/50">
-		Reusable text bits (addresses, hashtag sets, emojis) team members can insert with one click.
+		Reusable text bits (addresses, hashtag sets, emojis, multiline blocks) team members can insert with one click.
 	</p>
 	<div class="flex flex-col gap-4">
 		{#each data.accounts as acct}
@@ -167,13 +179,78 @@
 							/>
 						</fieldset>
 						<fieldset class="fieldset flex-1 min-w-48">
-							<legend class="fieldset-legend">Text to insert (emojis welcome)</legend>
-							<input
+							<legend class="fieldset-legend">Text to insert (multiline ok, emojis welcome)</legend>
+							<textarea
 								name="snippet_text"
-								type="text"
 								required
 								placeholder="123 Main St, Sydney NSW 2000"
-								class="input input-sm w-full"
+								rows="2"
+								class="textarea textarea-sm w-full"
+							></textarea>
+						</fieldset>
+						<button type="submit" class="btn btn-sm btn-neutral">Add</button>
+					</form>
+				</div>
+			</div>
+		{/each}
+	</div>
+</section>
+
+<!-- Tag snippets per account -->
+<section class="mb-12">
+	<h2 class="mb-1 text-sm font-semibold uppercase tracking-wide text-base-content/50">Tag snippets</h2>
+	<p class="mb-5 text-sm text-base-content/50">
+		Save Instagram usernames so team members can tag people in feed posts with one click.
+	</p>
+	<div class="flex flex-col gap-4">
+		{#each data.accounts as acct}
+			<div class="card bg-base-100">
+				<div class="card-body gap-4">
+					<h3 class="font-medium">{acct.label}</h3>
+
+					{#if acct.tagSnippets.length > 0}
+						<ul class="flex flex-col gap-1.5">
+							{#each acct.tagSnippets as tag}
+								<li class="flex items-center justify-between gap-3 rounded-box bg-base-200 px-3 py-2">
+									<div class="min-w-0">
+										<p class="text-xs font-medium">{tag.label}</p>
+										<p class="mt-0.5 text-xs text-base-content/50">@{tag.username}</p>
+									</div>
+									<form method="POST" action="?/deleteTagSnippet" use:enhance class="shrink-0">
+										<input type="hidden" name="id" value={tag.id} />
+										<button
+											type="submit"
+											class="btn btn-ghost btn-xs text-error"
+											onclick={(e) => { if (!confirm('Delete this tag?')) e.preventDefault(); }}
+										>Delete</button>
+									</form>
+								</li>
+							{/each}
+						</ul>
+					{:else}
+						<p class="text-xs text-base-content/40">No tag snippets yet.</p>
+					{/if}
+
+					<form method="POST" action="?/addTagSnippet" use:enhance class="flex flex-wrap items-end gap-2">
+						<input type="hidden" name="account_id" value={acct.id} />
+						<fieldset class="fieldset">
+							<legend class="fieldset-legend">Button label</legend>
+							<input
+								name="tag_label"
+								type="text"
+								required
+								placeholder="Photographer"
+								class="input input-sm w-36"
+							/>
+						</fieldset>
+						<fieldset class="fieldset">
+							<legend class="fieldset-legend">Instagram username</legend>
+							<input
+								name="tag_username"
+								type="text"
+								required
+								placeholder="@handle"
+								class="input input-sm w-40"
 							/>
 						</fieldset>
 						<button type="submit" class="btn btn-sm btn-neutral">Add</button>

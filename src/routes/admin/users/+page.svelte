@@ -67,7 +67,7 @@
 							{/each}
 						</div>
 						<div>
-							<button type="submit" class="btn btn-sm btn-ghost border border-base-300">
+							<button type="submit" class="btn btn-sm btn-neutral">
 								Save access
 							</button>
 						</div>

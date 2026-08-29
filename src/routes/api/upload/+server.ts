@@ -3,7 +3,7 @@ import { supabaseAdmin } from '$lib/server/supabase-admin';
 import type { RequestHandler } from './$types';
 
 const BUCKET = 'media';
-const MAX_SIZE_BYTES = 3 * 1024 * 1024; // 3 MB
+const MAX_SIZE_BYTES = 3 * 1024 * 1024; // 3 MB (client compresses before reaching this)
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const { user } = await locals.safeGetSession();

@@ -1,6 +1,6 @@
 import { fail } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { users, socialAccounts, captionSnippets } from '$lib/server/db/schema';
+import { users, socialAccounts, captionSnippets, tagSnippets } from '$lib/server/db/schema';
 import { eq, asc } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -12,11 +12,11 @@ async function requireAdmin(locals: App.Locals) {
 }
 
 export const load: PageServerLoad = async ({ url }) => {
-	const accounts = await db.select().from(socialAccounts).orderBy(socialAccounts.label);
-	const allSnippets = await db
-		.select()
-		.from(captionSnippets)
-		.orderBy(asc(captionSnippets.sortOrder), asc(captionSnippets.createdAt));
+	const [accounts, allSnippets, allTagSnippets] = await Promise.all([
+		db.select().from(socialAccounts).orderBy(socialAccounts.label),
+		db.select().from(captionSnippets).orderBy(asc(captionSnippets.sortOrder), asc(captionSnippets.createdAt)),
+		db.select().from(tagSnippets).orderBy(asc(tagSnippets.sortOrder), asc(tagSnippets.createdAt))
+	]);
 
 	const snippetsByAccount = new Map<string, typeof allSnippets>();
 	for (const s of allSnippets) {
@@ -25,8 +25,19 @@ export const load: PageServerLoad = async ({ url }) => {
 		snippetsByAccount.set(s.accountId, existing);
 	}
 
+	const tagSnippetsByAccount = new Map<string, typeof allTagSnippets>();
+	for (const t of allTagSnippets) {
+		const existing = tagSnippetsByAccount.get(t.accountId) ?? [];
+		existing.push(t);
+		tagSnippetsByAccount.set(t.accountId, existing);
+	}
+
 	return {
-		accounts: accounts.map((a) => ({ ...a, snippets: snippetsByAccount.get(a.id) ?? [] })),
+		accounts: accounts.map((a) => ({
+			...a,
+			snippets: snippetsByAccount.get(a.id) ?? [],
+			tagSnippets: tagSnippetsByAccount.get(a.id) ?? []
+		})),
 		connectMessage: url.searchParams.get('message'),
 		connectError: url.searchParams.get('error')
 	};
@@ -99,5 +110,32 @@ export const actions: Actions = {
 
 		await db.delete(captionSnippets).where(eq(captionSnippets.id, id));
 		return { snippetDeleted: true };
+	},
+
+	addTagSnippet: async ({ request, locals }) => {
+		if (!await requireAdmin(locals)) return fail(403, { tagSnippetError: 'Access denied' });
+
+		const form = await request.formData();
+		const accountId = (form.get('account_id') as string)?.trim();
+		const label = (form.get('tag_label') as string)?.trim();
+		const username = (form.get('tag_username') as string)?.trim().replace(/^@/, '');
+
+		if (!accountId || !label || !username) {
+			return fail(400, { tagSnippetError: 'Label and username are required.' });
+		}
+
+		await db.insert(tagSnippets).values({ accountId, label, username });
+		return { tagSnippetAdded: true };
+	},
+
+	deleteTagSnippet: async ({ request, locals }) => {
+		if (!await requireAdmin(locals)) return fail(403, { tagSnippetError: 'Access denied' });
+
+		const form = await request.formData();
+		const id = (form.get('id') as string)?.trim();
+		if (!id) return fail(400, { tagSnippetError: 'Missing ID.' });
+
+		await db.delete(tagSnippets).where(eq(tagSnippets.id, id));
+		return { tagSnippetDeleted: true };
 	}
 };

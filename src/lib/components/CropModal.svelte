@@ -236,6 +236,22 @@
 		uploadError = '';
 	}
 
+	const MAX_UPLOAD = 2.8 * 1024 * 1024; // stay comfortably under the server's 3 MB limit
+
+	async function compressBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+		let blob = await new Promise<Blob>((resolve) =>
+			canvas.toBlob((b) => resolve(b!), 'image/jpeg', 0.92)
+		);
+		// Iteratively lower quality until under the upload limit
+		for (const q of [0.82, 0.72, 0.62]) {
+			if (blob.size <= MAX_UPLOAD) break;
+			blob = await new Promise<Blob>((resolve) =>
+				canvas.toBlob((b) => resolve(b!), 'image/jpeg', q)
+			);
+		}
+		return blob;
+	}
+
 	async function doCrop(useOriginal = false) {
 		if (!rawFile) return;
 		cropUploading = true;
@@ -247,9 +263,7 @@
 			if (!useOriginal) {
 				const { outW, outH } = getRatio(cropRatio);
 				const canvas = await composite(outW, outH);
-				const blob = await new Promise<Blob>((resolve) =>
-					canvas.toBlob((b) => resolve(b!), 'image/jpeg', 0.92)
-				);
+				const blob = await compressBlob(canvas);
 				const name = rawFile.name.replace(/\.\w+$/, '') + '_cropped.jpg';
 				fileToUpload = new File([blob], name, { type: 'image/jpeg' });
 
@@ -261,6 +275,22 @@
 					thumbCanvas.toBlob((b) => resolve(b!), 'image/jpeg', 0.55)
 				);
 				thumbnailFile = new File([thumbBlob], name.replace('_cropped.jpg', '_thumb.jpg'), { type: 'image/jpeg' });
+			} else if (rawFile.size > MAX_UPLOAD) {
+				// "Skip — use original" was clicked but the raw file is too large; compress via canvas
+				const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+					const el = new Image();
+					const url = URL.createObjectURL(rawFile);
+					el.onload = () => { URL.revokeObjectURL(url); resolve(el); };
+					el.onerror = reject;
+					el.src = url;
+				});
+				const canvas = document.createElement('canvas');
+				canvas.width = img.naturalWidth;
+				canvas.height = img.naturalHeight;
+				canvas.getContext('2d')!.drawImage(img, 0, 0);
+				const blob = await compressBlob(canvas);
+				const name = rawFile.name.replace(/\.\w+$/, '') + '.jpg';
+				fileToUpload = new File([blob], name, { type: 'image/jpeg' });
 			}
 
 			const fd = new FormData();

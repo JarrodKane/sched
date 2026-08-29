@@ -56,7 +56,7 @@ export const load: PageServerLoad = async ({ params, parent }) => {
 	const [activePosts, publishedPosts] = await Promise.all([
 		filesWithUrl.length > 0
 			? db
-					.select({ mediaUrl: scheduledPosts.mediaUrl })
+					.select({ mediaUrl: scheduledPosts.mediaUrl, carouselItems: scheduledPosts.carouselItems })
 					.from(scheduledPosts)
 					.where(
 						and(
@@ -67,7 +67,7 @@ export const load: PageServerLoad = async ({ params, parent }) => {
 			: Promise.resolve([]),
 		filesWithUrl.length > 0
 			? db
-					.select({ mediaUrl: scheduledPosts.mediaUrl })
+					.select({ mediaUrl: scheduledPosts.mediaUrl, carouselItems: scheduledPosts.carouselItems })
 					.from(scheduledPosts)
 					.where(
 						and(
@@ -78,8 +78,16 @@ export const load: PageServerLoad = async ({ params, parent }) => {
 			: Promise.resolve([])
 	]);
 
-	const lockedUrls = new Set(activePosts.map((p) => p.mediaUrl));
-	const postedUrls = new Set(publishedPosts.map((p) => p.mediaUrl));
+	function urlsFromPost(p: { mediaUrl: string; carouselItems: string | null }): string[] {
+		const urls = [p.mediaUrl];
+		if (p.carouselItems) {
+			try { urls.push(...(JSON.parse(p.carouselItems) as string[])); } catch {}
+		}
+		return urls;
+	}
+
+	const lockedUrls = new Set(activePosts.flatMap(urlsFromPost));
+	const postedUrls = new Set(publishedPosts.flatMap(urlsFromPost));
 
 	return {
 		account,
@@ -108,19 +116,26 @@ export const actions: Actions = {
 		const { data: urlData } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(path);
 		const publicUrl = urlData.publicUrl;
 
+		// Check both mediaUrl and carousel_items for any pending/publishing post
 		const activePosts = await db
-			.select({ id: scheduledPosts.id })
+			.select({ mediaUrl: scheduledPosts.mediaUrl, carouselItems: scheduledPosts.carouselItems })
 			.from(scheduledPosts)
 			.where(
 				and(
 					eq(scheduledPosts.accountId, params.id),
-					inArray(scheduledPosts.status, ['pending', 'publishing']),
-					eq(scheduledPosts.mediaUrl, publicUrl)
+					inArray(scheduledPosts.status, ['pending', 'publishing'])
 				)
-			)
-			.limit(1);
+			);
 
-		if (activePosts.length > 0) {
+		const isLocked = activePosts.some((p) => {
+			if (p.mediaUrl === publicUrl) return true;
+			if (p.carouselItems) {
+				try { return (JSON.parse(p.carouselItems) as string[]).includes(publicUrl); } catch {}
+			}
+			return false;
+		});
+
+		if (isLocked) {
 			return fail(409, { error: 'Image is used by a scheduled post and cannot be deleted.' });
 		}
 
@@ -154,7 +169,7 @@ export const actions: Actions = {
 		);
 
 		const activePosts = await db
-			.select({ mediaUrl: scheduledPosts.mediaUrl })
+			.select({ mediaUrl: scheduledPosts.mediaUrl, carouselItems: scheduledPosts.carouselItems })
 			.from(scheduledPosts)
 			.where(
 				and(
@@ -162,7 +177,13 @@ export const actions: Actions = {
 					inArray(scheduledPosts.status, ['pending', 'publishing'])
 				)
 			);
-		const activeUrls = new Set(activePosts.map((p) => p.mediaUrl));
+		const activeUrls = new Set<string>();
+		for (const p of activePosts) {
+			activeUrls.add(p.mediaUrl);
+			if (p.carouselItems) {
+				try { for (const u of JSON.parse(p.carouselItems) as string[]) activeUrls.add(u); } catch {}
+			}
+		}
 
 		// Skip paths that are in use by a pending/publishing post
 		const deletable = paths.filter((p) => !activeUrls.has(urlMap.get(p)!));

@@ -3,6 +3,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import { tick } from 'svelte';
 	import CropModal from '$lib/components/CropModal.svelte';
+	import TextOverlayModal from '$lib/components/TextOverlayModal.svelte';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -12,12 +13,48 @@
 	let thumbnailUrlForPost = $state('');
 	let uploadError = $state('');
 	let scheduling = $state(false);
-	let postType = $state<'feed' | 'story'>('feed');
+	let postType = $state<'feed' | 'story' | 'carousel'>('feed');
 	let postNow = $state(false);
 	let caption = $state('');
 	let captionEl = $state<HTMLTextAreaElement | null>(null);
 	let fileInput = $state<HTMLInputElement | null>(null);
 	let imageDimensions = $state<{ width: number; height: number } | null>(null);
+
+	// Carousel state
+	let carouselUrls = $state<string[]>([]);
+	let addingToCarousel = $state(false); // flag so crop callback appends instead of replaces
+
+	// Carousel drag-to-reorder
+	let dragIndex = $state<number | null>(null);
+	let dropTargetIndex = $state<number | null>(null);
+
+	function onCarouselDragStart(e: DragEvent, i: number) {
+		dragIndex = i;
+		if (e.dataTransfer) { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(i)); }
+	}
+	function onCarouselDragEnter(i: number) {
+		if (dragIndex !== null && dragIndex !== i) dropTargetIndex = i;
+	}
+	function onCarouselDragEnd() { dragIndex = null; dropTargetIndex = null; }
+	// ondragover and ondrop live on the container — individual items only need ondragenter.
+	// Putting ondragover on items misses the gaps between them, causing drops to fail.
+	function onCarouselContainerDragOver(e: DragEvent) {
+		if (dragIndex !== null) e.preventDefault();
+	}
+	function onCarouselContainerDrop(e: DragEvent) {
+		e.preventDefault();
+		if (dragIndex === null || dropTargetIndex === null) { dragIndex = null; dropTargetIndex = null; return; }
+		const from = dragIndex, to = dropTargetIndex;
+		dragIndex = null; dropTargetIndex = null;
+		const arr = [...carouselUrls];
+		const [moved] = arr.splice(from, 1);
+		arr.splice(to, 0, moved);
+		carouselUrls = arr;
+	}
+
+	// Tag state
+	let selectedTags = $state<string[]>([]);
+	let customTagInput = $state('');
 
 	// Shared preview modal — used for both the "Preview post" button and queue items
 	let previewDialog = $state<HTMLDialogElement | null>(null);
@@ -35,10 +72,15 @@
 	let galleryDialog = $state<HTMLDialogElement | null>(null);
 
 	function pickFromGallery(url: string) {
-		uploadedUrl = url;
-		thumbnailUrlForPost = '';
-		uploadError = '';
-		checkDimensions(url);
+		if (addingToCarousel) {
+			if (carouselUrls.length < 10) carouselUrls = [...carouselUrls, url];
+			addingToCarousel = false;
+		} else {
+			uploadedUrl = url;
+			thumbnailUrlForPost = '';
+			uploadError = '';
+			checkDimensions(url);
+		}
 		galleryDialog?.close();
 	}
 
@@ -55,6 +97,7 @@
 	}
 
 	let cropModal = $state<CropModal | null>(null);
+	let textOverlayModal = $state<TextOverlayModal | null>(null);
 
 	// ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -114,8 +157,8 @@
 			uploadError = 'Only image files are supported.';
 			return;
 		}
-		if (file.size > 3 * 1024 * 1024) {
-			uploadError = 'Image must be 3 MB or smaller.';
+		if (file.size > 15 * 1024 * 1024) {
+			uploadError = 'Image must be 15 MB or smaller.';
 			return;
 		}
 		uploadError = '';
@@ -123,10 +166,45 @@
 	}
 
 	function handleCropComplete(url: string, thumbnailUrl: string | null) {
-		uploadedUrl = url;
-		thumbnailUrlForPost = thumbnailUrl ?? '';
+		if (addingToCarousel) {
+			carouselUrls = [...carouselUrls, url];
+			addingToCarousel = false;
+		} else {
+			uploadedUrl = url;
+			thumbnailUrlForPost = thumbnailUrl ?? '';
+			checkDimensions(url);
+		}
 		uploadError = '';
-		checkDimensions(url);
+	}
+
+	function addCarouselImage(e: Event) {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+		if (!file.type.startsWith('image/')) { uploadError = 'Only image files are supported.'; return; }
+		if (file.size > 15 * 1024 * 1024) { uploadError = 'Image must be 15 MB or smaller.'; return; }
+		uploadError = '';
+		addingToCarousel = true;
+		cropModal?.openWithFile(file, 'feed');
+		input.value = '';
+	}
+
+	function removeCarouselItem(i: number) {
+		carouselUrls = carouselUrls.filter((_, idx) => idx !== i);
+	}
+
+	function toggleTag(username: string) {
+		if (selectedTags.includes(username)) {
+			selectedTags = selectedTags.filter((t) => t !== username);
+		} else {
+			selectedTags = [...selectedTags, username];
+		}
+	}
+
+	function addCustomTag() {
+		const u = customTagInput.trim().replace(/^@/, '');
+		if (u && !selectedTags.includes(u)) selectedTags = [...selectedTags, u];
+		customTagInput = '';
 	}
 
 	function handleCropCancel() {
@@ -183,12 +261,19 @@
 
 <svelte:head><title>{data.account.label} — IG Scheduler</title></svelte:head>
 
-<!-- Crop modal (shared component) -->
+<!-- Crop modal -->
 <CropModal
 	bind:this={cropModal}
 	accountId={data.account.id}
 	oncomplete={handleCropComplete}
 	oncancel={handleCropCancel}
+/>
+
+<!-- Text overlay modal -->
+<TextOverlayModal
+	bind:this={textOverlayModal}
+	accountId={data.account.id}
+	oncomplete={(url) => { uploadedUrl = url; thumbnailUrlForPost = ''; checkDimensions(url); }}
 />
 
 <!-- ── Preview modal (shared for form preview + queue item preview) ───────────── -->
@@ -280,8 +365,8 @@
 </dialog>
 
 <!-- ── Gallery pick modal ─────────────────────────────────────────────────────── -->
-<dialog bind:this={galleryDialog} class="modal">
-	<div class="modal-box max-w-2xl w-full">
+<dialog bind:this={galleryDialog} class="modal" onclose={() => { addingToCarousel = false; }}>
+	<div class="modal-box max-w-xl w-full overflow-hidden">
 		<div class="flex items-center justify-between mb-4">
 			<h3 class="font-semibold">Choose from library</h3>
 			<form method="dialog"><button class="btn btn-ghost btn-sm btn-circle">✕</button></form>
@@ -289,16 +374,16 @@
 		{#if data.priorUploads.length === 0}
 			<p class="text-sm text-base-content/40">No images in library yet.</p>
 		{:else}
-			<div class="grid grid-cols-3 sm:grid-cols-4 gap-3 max-h-[60vh] overflow-y-auto">
+			<div class="grid grid-cols-3 sm:grid-cols-4 gap-3 max-h-[60vh] overflow-y-auto overflow-x-hidden">
 				{#each data.priorUploads as img}
 					<button
 						type="button"
 						onclick={() => pickFromGallery(img.url)}
-						class="group relative aspect-square overflow-hidden rounded-box border-2 transition
-							{uploadedUrl === img.url ? 'border-primary' : 'border-transparent hover:border-base-300'}"
+						class="group relative aspect-square overflow-hidden rounded-box border-2 transition min-w-0
+							{(addingToCarousel ? carouselUrls.includes(img.url) : uploadedUrl === img.url) ? 'border-primary' : 'border-transparent hover:border-base-300'}"
 					>
 						<img src={img.url} alt="" class="h-full w-full object-cover transition group-hover:scale-105" />
-						{#if uploadedUrl === img.url}
+						{#if addingToCarousel ? carouselUrls.includes(img.url) : uploadedUrl === img.url}
 							<span class="absolute inset-0 bg-primary/20 flex items-center justify-center">
 								<svg class="h-6 w-6 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
 							</span>
@@ -389,6 +474,9 @@
 								thumbnailUrlForPost = '';
 								caption = '';
 								imageDimensions = null;
+								carouselUrls = [];
+								selectedTags = [];
+								customTagInput = '';
 								if (fileInput) fileInput.value = '';
 							}
 							await update();
@@ -402,101 +490,169 @@
 						<div class="join">
 							<button
 								type="button"
-								onclick={() => (postType = 'feed')}
-								class="btn join-item btn-sm {postType === 'feed' ? 'btn-primary' : 'btn-ghost'}"
+								onclick={() => { postType = 'feed'; carouselUrls = []; }}
+								class="btn join-item btn-sm {postType === 'feed' ? 'btn-primary' : ''}"
 							>Feed</button>
 							<button
 								type="button"
-								onclick={() => (postType = 'story')}
-								class="btn join-item btn-sm {postType === 'story' ? 'btn-primary' : 'btn-ghost'}"
+								onclick={() => { postType = 'carousel'; }}
+								class="btn join-item btn-sm {postType === 'carousel' ? 'btn-primary' : ''}"
+							>Carousel</button>
+							<button
+								type="button"
+								onclick={() => { postType = 'story'; carouselUrls = []; selectedTags = []; }}
+								class="btn join-item btn-sm {postType === 'story' ? 'btn-primary' : ''}"
 							>Story</button>
 						</div>
 					</div>
 					<input type="hidden" name="type" value={postType} />
 
-					<!-- Image upload -->
-					<fieldset class="fieldset">
-						<legend class="fieldset-legend">Image</legend>
-						<input
-							bind:this={fileInput}
-							id="image-upload"
-							type="file"
-							accept="image/*"
-							onchange={handleFileSelect}
-							class="file-input w-full file-input-sm"
-						/>
-					</fieldset>
+					{#if postType === 'carousel'}
+						<!-- Carousel image upload -->
+						<div class="flex flex-col gap-3">
+							<p class="label">Images <span class="font-normal text-base-content/40">({carouselUrls.length}/10, min 2) — drag to reorder</span></p>
+							{#if carouselUrls.length > 0}
+								<div
+									class="flex flex-wrap gap-2"
+									ondragover={onCarouselContainerDragOver}
+									ondrop={onCarouselContainerDrop}
+								>
+									{#each carouselUrls as url, i}
+										<div
+											class="relative select-none transition-opacity cursor-grab active:cursor-grabbing
+												{dragIndex === i ? 'opacity-30' : ''}
+												{dropTargetIndex === i && dragIndex !== i ? 'ring-2 ring-primary ring-offset-1 rounded-box' : ''}"
+											draggable="true"
+											ondragstart={(e) => onCarouselDragStart(e, i)}
+											ondragenter={() => onCarouselDragEnter(i)}
+											ondragend={onCarouselDragEnd}
+										>
+											<img src={url} alt="" class="h-20 w-20 rounded-box object-cover pointer-events-none" />
+											<button
+												type="button"
+												onclick={() => removeCarouselItem(i)}
+												class="absolute -top-1.5 -right-1.5 btn btn-circle btn-xs btn-error opacity-90"
+												aria-label="Remove"
+											>✕</button>
+											<span class="absolute bottom-1 left-1 bg-black/60 text-white text-xs rounded px-1 pointer-events-none">{i + 1}</span>
+										</div>
+									{/each}
+								</div>
+							{/if}
+							{#if carouselUrls.length < 10}
+								<div class="flex flex-wrap gap-2">
+									<label class="btn btn-sm border border-dashed border-base-300 gap-1">
+										<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+										Upload image
+										<input type="file" accept="image/*" onchange={addCarouselImage} class="hidden" />
+									</label>
+									{#if data.priorUploads.length > 0}
+										<button
+											type="button"
+											onclick={() => { addingToCarousel = true; galleryDialog?.showModal(); }}
+											class="btn btn-sm border border-dashed border-base-300 gap-1"
+										>
+											<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+											From library
+										</button>
+									{/if}
+								</div>
+							{/if}
+						</div>
+						<!-- For carousel: first image goes in media_url for thumbnail, all urls in carousel_items -->
+						<input type="hidden" name="media_url" value={carouselUrls[0] ?? ''} />
+						<input type="hidden" name="carousel_items" value={JSON.stringify(carouselUrls)} />
+						<input type="hidden" name="thumbnail_url" value="" />
+					{:else}
+						<!-- Single image upload -->
+						<fieldset class="fieldset">
+							<legend class="fieldset-legend">Image</legend>
+							<input
+								bind:this={fileInput}
+								id="image-upload"
+								type="file"
+								accept="image/*"
+								onchange={handleFileSelect}
+								class="file-input w-full file-input-sm"
+							/>
+						</fieldset>
 
-					{#if uploadedUrl}
-						<div class="flex items-start gap-3">
-							<img src={uploadedUrl} alt="preview" class="h-20 w-20 rounded-box object-cover shrink-0" />
-							<div class="min-w-0 flex flex-col gap-1.5">
-								{#if imageDimensions}
-									{@const fit = getInstagramFit(imageDimensions.width, imageDimensions.height, postType)}
-									<p class="text-xs text-base-content/50">{imageDimensions.width} × {imageDimensions.height}px</p>
-									<span class="badge badge-soft badge-sm {fit.ok ? 'badge-success' : 'badge-warning'}">
-										{fit.label}
-									</span>
-								{/if}
-								<div class="flex flex-wrap gap-1.5 mt-0.5">
-									<button
-										type="button"
-										onclick={openFormPreview}
-										class="btn btn-ghost btn-xs"
-									>Preview post</button>
-									<button
-										type="button"
-										onclick={editCurrentImage}
-										class="btn btn-ghost btn-xs"
-									>Edit image</button>
+						{#if uploadedUrl}
+							<div class="flex items-start gap-3">
+								<img src={uploadedUrl} alt="preview" class="h-20 w-20 rounded-box object-cover shrink-0" />
+								<div class="min-w-0 flex flex-col gap-1.5">
+									{#if imageDimensions}
+										{@const fit = getInstagramFit(imageDimensions.width, imageDimensions.height, postType)}
+										<p class="text-xs text-base-content/50">{imageDimensions.width} × {imageDimensions.height}px</p>
+										<span class="badge badge-soft badge-sm {fit.ok ? 'badge-success' : 'badge-warning'}">
+											{fit.label}
+										</span>
+									{/if}
+									<div class="flex flex-wrap gap-1.5 mt-0.5">
+										<button
+											type="button"
+											onclick={openFormPreview}
+											class="btn btn-ghost btn-xs"
+										>Preview</button>
+										<button
+											type="button"
+											onclick={editCurrentImage}
+											class="btn btn-ghost btn-xs"
+										>Edit image</button>
+										<button
+											type="button"
+											onclick={() => textOverlayModal?.openWithUrl(uploadedUrl)}
+											class="btn btn-ghost btn-xs"
+										>Add text</button>
+									</div>
 								</div>
 							</div>
-						</div>
-					{/if}
-					<input type="hidden" name="media_url" value={uploadedUrl} />
-					<input type="hidden" name="thumbnail_url" value={thumbnailUrlForPost} />
+						{/if}
+						<input type="hidden" name="media_url" value={uploadedUrl} />
+						<input type="hidden" name="thumbnail_url" value={thumbnailUrlForPost} />
 
-					{#if data.priorUploads.length > 0}
-						<div>
-							<p class="label mb-2">Recent uploads</p>
-							<div class="flex flex-wrap items-center gap-2">
-								{#each data.priorUploads.slice(0, 2) as img}
+						{#if data.priorUploads.length > 0}
+							<div>
+								<p class="label mb-2">Recent uploads</p>
+								<div class="flex flex-wrap items-center gap-2">
+									{#each data.priorUploads.slice(0, 2) as img}
+										<button
+											type="button"
+											onclick={() => {
+												uploadedUrl = img.url;
+												thumbnailUrlForPost = '';
+												uploadError = '';
+												checkDimensions(img.url);
+											}}
+											class="relative h-16 w-16 overflow-hidden rounded-box border-2 transition {uploadedUrl === img.url
+												? 'border-neutral'
+												: 'border-transparent hover:border-base-300'}"
+										>
+											<img src={img.url} alt="" class="h-full w-full object-cover" />
+										</button>
+									{/each}
 									<button
 										type="button"
-										onclick={() => {
-											uploadedUrl = img.url;
-											thumbnailUrlForPost = '';
-											uploadError = '';
-											checkDimensions(img.url);
-										}}
-										class="relative h-16 w-16 overflow-hidden rounded-box border-2 transition {uploadedUrl === img.url
-											? 'border-neutral'
-											: 'border-transparent hover:border-base-300'}"
+										onclick={() => { addingToCarousel = false; galleryDialog?.showModal(); }}
+										class="btn btn-ghost btn-sm gap-1 text-base-content/60"
 									>
-										<img src={img.url} alt="" class="h-full w-full object-cover" />
+										<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+											<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+											<polyline points="21 15 16 10 5 21"/>
+										</svg>
+										Browse library
 									</button>
-								{/each}
-								<button
-									type="button"
-									onclick={() => galleryDialog?.showModal()}
-									class="btn btn-ghost btn-sm gap-1 text-base-content/60"
-								>
-									<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-										<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
-										<polyline points="21 15 16 10 5 21"/>
-									</svg>
-									Browse library
-								</button>
+								</div>
 							</div>
-						</div>
+						{/if}
 					{/if}
 
 					{#if uploadError}
 						<div role="alert" class="alert alert-error alert-soft text-sm">{uploadError}</div>
 					{/if}
 
-					<!-- Caption (feed only) -->
-					{#if postType === 'feed'}
+					<!-- Caption (feed + carousel) -->
+					{#if postType === 'feed' || postType === 'carousel'}
 						<fieldset class="fieldset">
 							<legend class="fieldset-legend">
 								Caption <span class="font-normal text-base-content/40">(optional)</span>
@@ -529,6 +685,50 @@
 								</div>
 							{/if}
 						</fieldset>
+
+						<!-- Tag people -->
+						<div class="flex flex-col gap-2">
+							<p class="label">Tag people <span class="font-normal text-base-content/40">(optional)</span></p>
+
+							{#if selectedTags.length > 0}
+								<div class="flex flex-wrap gap-1.5 mb-1">
+									{#each selectedTags as tag}
+										<span class="badge badge-neutral gap-1">
+											@{tag}
+											<button type="button" onclick={() => toggleTag(tag)} class="opacity-60 hover:opacity-100" aria-label="Remove">✕</button>
+										</span>
+									{/each}
+								</div>
+							{/if}
+
+							{#if data.tagSnippets.length > 0}
+								<div class="flex flex-wrap gap-1.5">
+									{#each data.tagSnippets as t}
+										<button
+											type="button"
+											onclick={() => toggleTag(t.username)}
+											class="btn btn-xs rounded-full {selectedTags.includes(t.username) ? 'btn-neutral' : 'btn-ghost border border-base-300'}"
+										>
+											{selectedTags.includes(t.username) ? '✓ ' : ''}{t.label}
+										</button>
+									{/each}
+								</div>
+							{/if}
+
+							<div class="flex gap-2 items-center">
+								<input
+									type="text"
+									bind:value={customTagInput}
+									placeholder="@username"
+									class="input input-sm w-36"
+									onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomTag(); } }}
+									autocorrect="off"
+									autocapitalize="off"
+								/>
+								<button type="button" onclick={addCustomTag} class="btn btn-ghost btn-sm">Add</button>
+							</div>
+						</div>
+						<input type="hidden" name="user_tags" value={JSON.stringify(selectedTags)} />
 					{/if}
 
 					<!-- When to post -->
@@ -538,12 +738,12 @@
 							<button
 								type="button"
 								onclick={() => (postNow = false)}
-								class="btn join-item btn-sm {!postNow ? 'btn-primary' : 'btn-ghost'}"
+								class="btn join-item btn-sm {!postNow ? 'btn-primary' : ''}"
 							>Schedule</button>
 							<button
 								type="button"
 								onclick={() => (postNow = true)}
-								class="btn join-item btn-sm {postNow ? 'btn-primary' : 'btn-ghost'}"
+								class="btn join-item btn-sm {postNow ? 'btn-primary' : ''}"
 							>Post now</button>
 						</div>
 						{#if !postNow}
@@ -554,7 +754,7 @@
 								bind:value={scheduledFor}
 								min={minDatetime}
 								required
-								class="input input-sm"
+								class="input input-sm w-full sm:w-auto"
 							/>
 						{/if}
 					</div>
@@ -563,7 +763,7 @@
 						<button
 							type="submit"
 							formaction={postNow ? '?/publishNow' : '?/schedule'}
-							disabled={scheduling || !uploadedUrl}
+							disabled={scheduling || (postType === 'carousel' ? carouselUrls.length < 2 : !uploadedUrl)}
 							class="btn btn-primary"
 						>
 							{#if scheduling}
@@ -629,29 +829,29 @@
 										<p class="text-xs text-base-content/50 leading-snug mb-1.5 line-clamp-2">{post.caption}</p>
 									{/if}
 									{#if post.status === 'pending'}
-										<div class="flex flex-wrap items-center gap-0.5 -ml-1.5">
+										<div class="flex flex-wrap items-center gap-1 mt-0.5">
 											<button
 												type="button"
 												onclick={() => openQueueItemPreview(post)}
-												class="btn btn-ghost btn-xs text-base-content/50"
+												class="btn btn-xs"
 											>Preview</button>
 											{#if post.type === 'feed'}
 												<button
 													type="button"
 													onclick={() => openEditCaption(post.id, post.caption)}
-													class="btn btn-ghost btn-xs text-base-content/50"
-												>Edit caption</button>
+													class="btn btn-xs"
+												>Caption</button>
 											{/if}
 											<button
 												type="button"
 												onclick={() => openReschedule(post.id, post.scheduledFor)}
-												class="btn btn-ghost btn-xs text-base-content/50"
+												class="btn btn-xs"
 											>Reschedule</button>
 											<form method="POST" action="?/cancel" use:enhance>
 												<input type="hidden" name="post_id" value={post.id} />
 												<button
 													type="submit"
-													class="btn btn-ghost btn-xs text-error/70"
+													class="btn btn-xs btn-error btn-soft"
 													onclick={(e) => { if (!confirm('Cancel this scheduled post?')) e.preventDefault(); }}
 												>Cancel</button>
 											</form>
