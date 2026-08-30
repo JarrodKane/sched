@@ -37,6 +37,29 @@
 	</a>
 </div>
 
+<!-- Token expiry banners -->
+{#if data.accounts.some((a) => isExpired(a.tokenExpiresAt))}
+	<div role="alert" class="alert alert-error mb-4">
+		<svg class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+		<div>
+			<p class="font-semibold">Token expired — posts are failing</p>
+			<p class="text-sm opacity-80">
+				{data.accounts.filter((a) => isExpired(a.tokenExpiresAt)).map((a) => a.label).join(', ')} — reconnect to restore publishing.
+			</p>
+		</div>
+	</div>
+{:else if data.accounts.some((a) => isExpiringSoon(a.tokenExpiresAt))}
+	<div role="alert" class="alert alert-warning mb-4">
+		<svg class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+		<div>
+			<p class="font-semibold">Token expiring within 7 days</p>
+			<p class="text-sm opacity-80">
+				{data.accounts.filter((a) => isExpiringSoon(a.tokenExpiresAt)).map((a) => a.label).join(', ')} — reconnect soon to avoid publishing failures.
+			</p>
+		</div>
+	</div>
+{/if}
+
 <!-- Flash messages -->
 {#if data.connectMessage}
 	<div role="alert" class="alert alert-success alert-soft mb-4 text-sm">{data.connectMessage}</div>

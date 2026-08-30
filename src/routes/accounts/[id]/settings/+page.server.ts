@@ -25,17 +25,17 @@ export const load: PageServerLoad = async ({ params, parent }) => {
 
 	const [snippets, tags, accountRows] = await Promise.all([
 		db
-			.select()
+			.select({ id: captionSnippets.id, accountId: captionSnippets.accountId, label: captionSnippets.label, text: captionSnippets.text, useInAi: captionSnippets.useInAi, sortOrder: captionSnippets.sortOrder, createdAt: captionSnippets.createdAt })
 			.from(captionSnippets)
 			.where(eq(captionSnippets.accountId, params.id))
 			.orderBy(asc(captionSnippets.sortOrder), asc(captionSnippets.createdAt)),
 		db
-			.select()
+			.select({ id: tagSnippets.id, accountId: tagSnippets.accountId, label: tagSnippets.label, username: tagSnippets.username, category: tagSnippets.category, useInAi: tagSnippets.useInAi, sortOrder: tagSnippets.sortOrder, createdAt: tagSnippets.createdAt })
 			.from(tagSnippets)
 			.where(eq(tagSnippets.accountId, params.id))
 			.orderBy(asc(tagSnippets.sortOrder), asc(tagSnippets.createdAt)),
 		db
-			.select({ locationId: socialAccounts.locationId, locationName: socialAccounts.locationName })
+			.select({ locationId: socialAccounts.locationId, locationName: socialAccounts.locationName, aiInstructions: socialAccounts.aiInstructions })
 			.from(socialAccounts)
 			.where(eq(socialAccounts.id, params.id))
 			.limit(1)
@@ -47,7 +47,8 @@ export const load: PageServerLoad = async ({ params, parent }) => {
 		location: {
 			id: accountRows[0]?.locationId ?? null,
 			name: accountRows[0]?.locationName ?? null
-		}
+		},
+		aiInstructions: accountRows[0]?.aiInstructions ?? null
 	};
 };
 
@@ -69,6 +70,47 @@ export const actions: Actions = {
 			.where(eq(socialAccounts.id, params.id));
 
 		return { locationSaved: true };
+	},
+
+	updateAiInstructions: async ({ request, params, locals }) => {
+		const profile = await requireAccess(locals, params.id);
+		if (!profile) return fail(403, { error: 'Access denied' });
+
+		const form = await request.formData();
+		const aiInstructions = (form.get('ai_instructions') as string | null)?.trim() || null;
+
+		await db
+			.update(socialAccounts)
+			.set({ aiInstructions })
+			.where(eq(socialAccounts.id, params.id));
+
+		return { aiInstructionsSaved: true };
+	},
+
+	toggleSnippetAi: async ({ request, params, locals }) => {
+		const profile = await requireAccess(locals, params.id);
+		if (!profile) return fail(403, { error: 'Access denied' });
+
+		const form = await request.formData();
+		const id = form.get('id') as string;
+		const useInAi = form.get('use_in_ai') === 'true';
+		if (!id) return fail(400, { error: 'Missing snippet ID.' });
+
+		await db.update(captionSnippets).set({ useInAi }).where(eq(captionSnippets.id, id));
+		return { snippetAiToggled: true };
+	},
+
+	toggleTagAi: async ({ request, params, locals }) => {
+		const profile = await requireAccess(locals, params.id);
+		if (!profile) return fail(403, { error: 'Access denied' });
+
+		const form = await request.formData();
+		const id = form.get('id') as string;
+		const useInAi = form.get('use_in_ai') === 'true';
+		if (!id) return fail(400, { error: 'Missing tag ID.' });
+
+		await db.update(tagSnippets).set({ useInAi }).where(eq(tagSnippets.id, id));
+		return { tagAiToggled: true };
 	},
 
 	addSnippet: async ({ request, params, locals }) => {
@@ -127,11 +169,12 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const label = (form.get('label') as string | null)?.trim();
 		const username = (form.get('username') as string | null)?.trim().replace(/^@/, '');
+		const category = (form.get('category') as string | null)?.trim() || null;
 
 		if (!label || !username) return fail(400, { error: 'Label and username are required.' });
 		if (label.length > 60) return fail(400, { error: 'Label must be 60 characters or less.' });
 
-		await db.insert(tagSnippets).values({ accountId: params.id, label, username });
+		await db.insert(tagSnippets).values({ accountId: params.id, label, username, category });
 		return { tagAdded: true };
 	},
 
@@ -143,12 +186,13 @@ export const actions: Actions = {
 		const id = form.get('id') as string;
 		const label = (form.get('label') as string | null)?.trim();
 		const username = (form.get('username') as string | null)?.trim().replace(/^@/, '');
+		const category = (form.get('category') as string | null)?.trim() || null;
 
 		if (!id || !label || !username) return fail(400, { error: 'All fields required.' });
 
 		await db
 			.update(tagSnippets)
-			.set({ label, username })
+			.set({ label, username, category })
 			.where(eq(tagSnippets.id, id));
 
 		return { tagUpdated: true };

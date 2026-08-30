@@ -16,7 +16,8 @@ export const socialAccounts = pgTable('social_accounts', {
 	accessToken: text('access_token').notNull(),
 	tokenExpiresAt: timestamp('token_expires_at', { withTimezone: true }),
 	locationId: text('location_id'),
-	locationName: text('location_name')
+	locationName: text('location_name'),
+	aiInstructions: text('ai_instructions')
 });
 
 export const userAccountAccess = pgTable(
@@ -60,6 +61,7 @@ export const captionSnippets = pgTable('caption_snippets', {
 		.references(() => socialAccounts.id, { onDelete: 'cascade' }),
 	label: text('label').notNull(),
 	text: text('text').notNull(),
+	useInAi: boolean('use_in_ai').notNull().default(false),
 	sortOrder: integer('sort_order').notNull().default(0),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
@@ -71,6 +73,8 @@ export const tagSnippets = pgTable('tag_snippets', {
 		.references(() => socialAccounts.id, { onDelete: 'cascade' }),
 	label: text('label').notNull(),
 	username: text('username').notNull(),
+	category: text('category'), // 'venue' | 'act' | 'mc' | null
+	useInAi: boolean('use_in_ai').notNull().default(false),
 	sortOrder: integer('sort_order').notNull().default(0),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });

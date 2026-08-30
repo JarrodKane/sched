@@ -2,6 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import CropModal from '$lib/components/CropModal.svelte';
+	import PostPreviewModal from '$lib/components/PostPreviewModal.svelte';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -22,10 +23,8 @@
 	let downloading = $state<string | null>(null);
 	let cropModal = $state<CropModal | null>(null);
 
-	// Preview dialog state
-	let previewDialog = $state<HTMLDialogElement | null>(null);
-	let previewUrl = $state('');
-	let previewType = $state<'feed' | 'story'>('feed');
+	// Preview modal
+	let previewModal = $state<PostPreviewModal | null>(null);
 
 	// Select mode
 	let selectMode = $state(false);
@@ -49,8 +48,7 @@
 	);
 
 	function openPreview(url: string) {
-		previewUrl = url;
-		previewDialog?.showModal();
+		previewModal?.open({ url, type: 'feed' });
 	}
 
 	async function downloadImage(url: string, filename: string) {
@@ -129,50 +127,7 @@
 />
 
 <!-- Preview modal -->
-<dialog bind:this={previewDialog} class="modal">
-	<div class="modal-box flex flex-col items-center gap-4 bg-transparent shadow-none p-4 max-w-xs">
-		<div class="join">
-			<button
-				type="button"
-				onclick={() => (previewType = 'feed')}
-				class="btn join-item btn-sm {previewType === 'feed' ? 'btn-primary' : 'btn-ghost'}"
-			>Feed</button>
-			<button
-				type="button"
-				onclick={() => (previewType = 'story')}
-				class="btn join-item btn-sm {previewType === 'story' ? 'btn-primary' : 'btn-ghost'}"
-			>Story</button>
-		</div>
-
-		<div class="mockup-phone">
-			<div class="mockup-phone-camera"></div>
-			<div class="mockup-phone-display">
-				<div class="bg-base-100 flex flex-col h-full">
-					<div class="flex items-center gap-2 p-2 border-b border-base-300 shrink-0">
-						<div class="w-7 h-7 rounded-full bg-linear-to-tr from-yellow-400 via-pink-500 to-purple-600"></div>
-						<span class="text-xs font-semibold">{data.account.label}</span>
-					</div>
-					{#if previewType === 'story'}
-						<div class="aspect-9/16 overflow-hidden bg-black">
-							<img src={previewUrl} alt="" class="h-full w-full object-cover" />
-						</div>
-					{:else}
-						<div class="aspect-square overflow-hidden bg-base-200">
-							<img src={previewUrl} alt="" class="h-full w-full object-cover" />
-						</div>
-					{/if}
-				</div>
-			</div>
-		</div>
-
-		<div class="modal-action w-full m-0">
-			<form method="dialog" class="w-full">
-				<button class="btn btn-sm w-full">Close preview</button>
-			</form>
-		</div>
-	</div>
-	<form method="dialog" class="modal-backdrop"><button>close</button></form>
-</dialog>
+<PostPreviewModal bind:this={previewModal} accountLabel={data.account.label} showTypeToggle={true} />
 
 {#if form?.error}
 	<div role="alert" class="alert alert-error alert-soft mb-4 text-sm">{form.error}</div>
@@ -238,7 +193,7 @@
 			{filter === 'posted' ? 'No posted images yet.' : 'No images uploaded yet.'}
 		</div>
 	{:else}
-		<div class="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+		<div class="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
 			{#each visibleFiles as file}
 				<div class="card bg-base-100 overflow-hidden group {selectMode && selected.has(file.path) ? 'ring-2 ring-primary' : ''}">
 					<figure class="aspect-square overflow-hidden bg-base-200 relative">
@@ -316,13 +271,18 @@
 						{/if}
 					</figure>
 
-					<div class="card-body p-3 gap-0.5">
+					<div class="card-body p-2 sm:p-3 gap-0.5">
 						<p class="text-xs font-medium truncate" title={file.name}>{file.name}</p>
 						<p class="text-xs text-base-content/40">
 							{formatDate(file.createdAt)}{file.size ? ` · ${formatSize(file.size)}` : ''}
 						</p>
 						{#if !selectMode}
-							<div class="flex gap-1 mt-1.5">
+							<div class="flex gap-1 mt-1.5 flex-wrap">
+								<button
+									type="button"
+									onclick={() => openPreview(file.url)}
+									class="btn btn-ghost btn-xs"
+								>Preview</button>
 								<button
 									type="button"
 									onclick={() => cropModal?.openWithUrl(file.url)}

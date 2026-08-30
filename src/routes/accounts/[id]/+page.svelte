@@ -4,6 +4,7 @@
 	import { tick } from 'svelte';
 	import CropModal from '$lib/components/CropModal.svelte';
 	import TextOverlayModal from '$lib/components/TextOverlayModal.svelte';
+	import PostPreviewModal from '$lib/components/PostPreviewModal.svelte';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -12,6 +13,44 @@
 	let thumbnailUrlForPost = $state('');
 	let uploadError = $state('');
 	let scheduling = $state(false);
+	let generatingCaption = $state(false);
+	let generateError = $state('');
+	let captionStyle = $state<'event' | 'recap'>('event');
+	let captionHistory = $state<string[]>([]);
+
+	async function generateCaption() {
+		generateError = '';
+		generatingCaption = true;
+		const allTaggedPeople = postType === 'carousel'
+			? [...new Set(Object.values(carouselTagMap).flat())]
+			: selectedTags;
+		try {
+			const res = await fetch(`/accounts/${data.account.id}/generate-caption`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ context: caption, taggedPeople: allTaggedPeople, style: captionStyle })
+			});
+			if (!res.ok) {
+				const err = await res.json().catch(() => ({}));
+				generateError = err?.message ?? 'Failed to generate caption.';
+			} else {
+				const { caption: generated } = await res.json();
+				captionHistory = [...captionHistory, caption];
+				caption = generated;
+			}
+		} catch {
+			generateError = 'Network error — could not reach the server.';
+		} finally {
+			generatingCaption = false;
+		}
+	}
+
+	function undoCaption() {
+		if (captionHistory.length === 0) return;
+		const prev = captionHistory[captionHistory.length - 1];
+		captionHistory = captionHistory.slice(0, -1);
+		caption = prev;
+	}
 	let postType = $state<'feed' | 'story' | 'carousel'>('feed');
 	let postNow = $state(false);
 	let caption = $state('');
@@ -48,21 +87,38 @@
 		if (dragIndex === null || dropTargetIndex === null) { dragIndex = null; dropTargetIndex = null; return; }
 		const from = dragIndex, to = dropTargetIndex;
 		dragIndex = null; dropTargetIndex = null;
-		const arr = [...carouselUrls];
-		const [moved] = arr.splice(from, 1);
-		arr.splice(to, 0, moved);
-		carouselUrls = arr;
+		// Build new order as a permutation of old indices
+		const oldOrder = Array.from({ length: carouselUrls.length }, (_, i) => i);
+		const [movedIdx] = oldOrder.splice(from, 1);
+		oldOrder.splice(to, 0, movedIdx);
+		// oldOrder[newPos] = oldPos
+		carouselUrls = oldOrder.map((i) => carouselUrls[i]);
+		// Remap tag map to follow images to their new positions
+		const newMap: Record<number, string[]> = {};
+		for (let newPos = 0; newPos < oldOrder.length; newPos++) {
+			const oldPos = oldOrder[newPos];
+			const tags = carouselTagMap[oldPos];
+			if (tags?.length) newMap[newPos] = tags;
+		}
+		carouselTagMap = newMap;
+		// Keep selector on the same image
+		tagImageIndex = oldOrder.indexOf(tagImageIndex);
 	}
 
 	// Tag state
 	let selectedTags = $state<string[]>([]);
 	let customTagInput = $state('');
 
+	// Carousel-specific tag state: which image is active for tagging, and a map of imageIndex → usernames
+	let tagImageIndex = $state(0);
+	let carouselTagMap = $state<Record<number, string[]>>({});
+	// Unified view: tags for the currently-active context (carousel image or single post)
+	const activeTags = $derived(
+		postType === 'carousel' ? (carouselTagMap[tagImageIndex] ?? []) : selectedTags
+	);
+
 	// Shared preview modal — used for both the "Preview post" button and queue items
-	let previewDialog = $state<HTMLDialogElement | null>(null);
-	let previewImageUrl = $state('');
-	let previewPostType = $state<'feed' | 'story'>('feed');
-	let previewCaption = $state('');
+	let previewModal = $state<PostPreviewModal | null>(null);
 
 	// Reschedule modal
 	let rescheduleDialog = $state<HTMLDialogElement | null>(null);
@@ -104,6 +160,23 @@
 
 	let cropModal = $state<CropModal | null>(null);
 	let textOverlayModal = $state<TextOverlayModal | null>(null);
+
+	// View caption modal (history panel)
+	let viewCaptionDialog = $state<HTMLDialogElement | null>(null);
+	let viewCaptionText = $state('');
+	let viewCaptionCopied = $state(false);
+
+	function openViewCaption(caption: string) {
+		viewCaptionText = caption;
+		viewCaptionCopied = false;
+		viewCaptionDialog?.showModal();
+	}
+
+	async function copyViewCaption() {
+		await navigator.clipboard.writeText(viewCaptionText);
+		viewCaptionCopied = true;
+		setTimeout(() => { viewCaptionCopied = false; }, 1500);
+	}
 
 	// ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -196,21 +269,70 @@
 	}
 
 	function removeCarouselItem(i: number) {
+		const newLength = carouselUrls.length - 1;
 		carouselUrls = carouselUrls.filter((_, idx) => idx !== i);
+		// Shift tag map: drop entry at i, shift entries > i down by 1
+		const newMap: Record<number, string[]> = {};
+		for (const [k, v] of Object.entries(carouselTagMap)) {
+			const ki = +k;
+			if (ki < i) newMap[ki] = v;
+			else if (ki > i) newMap[ki - 1] = v;
+		}
+		carouselTagMap = newMap;
+		if (tagImageIndex >= newLength) tagImageIndex = Math.max(0, newLength - 1);
+	}
+
+	function moveCarouselItem(i: number, dir: -1 | 1) {
+		const j = i + dir;
+		if (j < 0 || j >= carouselUrls.length) return;
+		const arr = [...carouselUrls];
+		[arr[i], arr[j]] = [arr[j], arr[i]];
+		carouselUrls = arr;
+		// Swap tags alongside the images
+		const newMap = { ...carouselTagMap };
+		const ti = carouselTagMap[i], tj = carouselTagMap[j];
+		if (ti?.length) newMap[j] = ti; else delete newMap[j];
+		if (tj?.length) newMap[i] = tj; else delete newMap[i];
+		carouselTagMap = newMap;
+		// Keep the selector pointing at the same image
+		if (tagImageIndex === i) tagImageIndex = j;
+		else if (tagImageIndex === j) tagImageIndex = i;
 	}
 
 	function toggleTag(username: string) {
-		if (selectedTags.includes(username)) {
-			selectedTags = selectedTags.filter((t) => t !== username);
+		if (postType === 'carousel') {
+			const current = carouselTagMap[tagImageIndex] ?? [];
+			carouselTagMap = {
+				...carouselTagMap,
+				[tagImageIndex]: current.includes(username)
+					? current.filter((u) => u !== username)
+					: [...current, username]
+			};
 		} else {
-			selectedTags = [...selectedTags, username];
+			if (selectedTags.includes(username)) {
+				selectedTags = selectedTags.filter((t) => t !== username);
+			} else {
+				selectedTags = [...selectedTags, username];
+			}
 		}
 	}
 
 	function addCustomTag() {
 		const u = customTagInput.trim().replace(/^@/, '');
-		if (u && !selectedTags.includes(u)) selectedTags = [...selectedTags, u];
+		if (!u) return;
 		customTagInput = '';
+		if (postType === 'carousel') {
+			const current = carouselTagMap[tagImageIndex] ?? [];
+			if (!current.includes(u))
+				carouselTagMap = { ...carouselTagMap, [tagImageIndex]: [...current, u] };
+		} else {
+			if (!selectedTags.includes(u)) selectedTags = [...selectedTags, u];
+		}
+	}
+
+	function removeCarouselTag(imageIndex: number, username: string) {
+		const current = carouselTagMap[imageIndex] ?? [];
+		carouselTagMap = { ...carouselTagMap, [imageIndex]: current.filter((u) => u !== username) };
 	}
 
 	function handleCropCancel() {
@@ -223,17 +345,29 @@
 	}
 
 	function openFormPreview() {
-		previewImageUrl = uploadedUrl;
-		previewPostType = postType;
-		previewCaption = caption;
-		previewDialog?.showModal();
+		if (postType === 'carousel' && carouselUrls.length > 0) {
+			previewModal?.open({ url: carouselUrls[0], urls: carouselUrls, type: 'feed', caption });
+		} else {
+			previewModal?.open({
+				url: uploadedUrl,
+				type: postType === 'carousel' ? 'feed' : postType,
+				ratio: imageDimensions ? imageDimensions.width / imageDimensions.height : 1,
+				caption
+			});
+		}
 	}
 
-	function openQueueItemPreview(post: { mediaUrl: string; type: string; caption: string | null }) {
-		previewImageUrl = post.mediaUrl;
-		previewPostType = post.type as 'feed' | 'story';
-		previewCaption = post.caption ?? '';
-		previewDialog?.showModal();
+	function openQueueItemPreview(post: { mediaUrl: string; type: string; caption: string | null; carouselItems?: string | null }) {
+		let urls: string[] | undefined;
+		if (post.type === 'carousel' && post.carouselItems) {
+			try { urls = JSON.parse(post.carouselItems); } catch { /* ignore */ }
+		}
+		previewModal?.open({
+			url: post.mediaUrl,
+			urls,
+			type: post.type === 'story' ? 'story' : 'feed',
+			caption: post.caption ?? ''
+		});
 	}
 
 	function openReschedule(postId: string, currentScheduledFor: string | Date) {
@@ -283,52 +417,11 @@
 	oncomplete={(url) => { uploadedUrl = url; thumbnailUrlForPost = ''; checkDimensions(url); }}
 />
 
-<!-- ── Preview modal (shared for form preview + queue item preview) ───────────── -->
-<dialog bind:this={previewDialog} class="modal">
-	<div class="modal-box flex flex-col items-center gap-4 bg-transparent shadow-none p-4 max-w-xs">
-		<div class="mockup-phone">
-			<div class="mockup-phone-camera"></div>
-			<div class="mockup-phone-display">
-				<div class="bg-base-100 flex flex-col h-full">
-					<div class="flex items-center gap-2 p-2 border-b border-base-300 shrink-0">
-						<div class="w-7 h-7 rounded-full bg-linear-to-tr from-yellow-400 via-pink-500 to-purple-600"></div>
-						<span class="text-xs font-semibold">{data.account.label}</span>
-					</div>
-					{#if previewPostType === 'story'}
-						<div class="aspect-9/16 overflow-hidden bg-black">
-							<img src={previewImageUrl} alt="" class="h-full w-full object-cover" />
-						</div>
-					{:else}
-						<div class="aspect-square overflow-hidden bg-base-200">
-							<img src={previewImageUrl} alt="" class="h-full w-full object-cover" />
-						</div>
-					{/if}
-					{#if previewPostType === 'feed'}
-						<div class="p-2 shrink-0">
-							{#if previewCaption}
-								<p class="text-xs leading-snug">
-									<span class="font-semibold">{data.account.label}</span>
-									{' '}{previewCaption}
-								</p>
-							{:else}
-								<p class="text-xs text-base-content/40 italic">No caption</p>
-							{/if}
-						</div>
-					{/if}
-				</div>
-			</div>
-		</div>
-		<div class="modal-action w-full m-0">
-			<form method="dialog" class="w-full">
-				<button class="btn btn-sm w-full">Close preview</button>
-			</form>
-		</div>
-	</div>
-	<form method="dialog" class="modal-backdrop"><button>close</button></form>
-</dialog>
+<!-- ── Preview modal ───────────────────────────────────────────────────────────── -->
+<PostPreviewModal bind:this={previewModal} accountLabel={data.account.label} />
 
 <!-- ── Reschedule modal ───────────────────────────────────────────────────────── -->
-<dialog bind:this={rescheduleDialog} class="modal">
+<dialog bind:this={rescheduleDialog} class="modal modal-bottom sm:modal-middle">
 	<div class="modal-box max-w-sm">
 		<h3 class="font-semibold mb-4">Reschedule post</h3>
 		<form
@@ -377,7 +470,7 @@
 </dialog>
 
 <!-- ── Gallery pick modal ─────────────────────────────────────────────────────── -->
-<dialog bind:this={galleryDialog} class="modal" onclose={() => { addingToCarousel = false; }}>
+<dialog bind:this={galleryDialog} class="modal modal-bottom sm:modal-middle" onclose={() => { addingToCarousel = false; }}>
 	<div class="modal-box max-w-xl w-full overflow-hidden">
 		<div class="flex items-center justify-between mb-4">
 			<h3 class="font-semibold">Choose from library</h3>
@@ -412,7 +505,7 @@
 </dialog>
 
 <!-- ── Edit caption modal ─────────────────────────────────────────────────────── -->
-<dialog bind:this={editCaptionDialog} class="modal">
+<dialog bind:this={editCaptionDialog} class="modal modal-bottom sm:modal-middle">
 	<div class="modal-box max-w-sm">
 		<h3 class="font-semibold mb-4">Edit caption</h3>
 		<form
@@ -439,7 +532,7 @@
 				<textarea
 					name="caption"
 					bind:value={editCaptionValue}
-					rows="5"
+					rows="8"
 					placeholder="Write your caption…"
 					class="textarea w-full"
 				></textarea>
@@ -455,6 +548,21 @@
 				<button type="button" onclick={() => editCaptionDialog?.close()} class="btn btn-ghost flex-1">Cancel</button>
 			</div>
 		</form>
+	</div>
+	<form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<!-- ── View caption modal (history) ──────────────────────────────────────────── -->
+<dialog bind:this={viewCaptionDialog} class="modal modal-bottom sm:modal-middle">
+	<div class="modal-box max-w-sm">
+		<h3 class="font-semibold mb-3">Caption</h3>
+		<p class="text-sm text-base-content/80 whitespace-pre-line leading-relaxed">{viewCaptionText}</p>
+		<div class="modal-action mt-4 gap-2">
+			<button class="btn btn-ghost btn-sm" onclick={copyViewCaption}>
+				{viewCaptionCopied ? 'Copied!' : 'Copy caption'}
+			</button>
+			<button class="btn btn-sm" onclick={() => viewCaptionDialog?.close()}>Close</button>
+		</div>
 	</div>
 	<form method="dialog" class="modal-backdrop"><button>close</button></form>
 </dialog>
@@ -493,6 +601,9 @@
 								imageDimensions = null;
 								carouselUrls = [];
 								selectedTags = [];
+								carouselTagMap = {};
+								tagImageIndex = 0;
+								captionHistory = [];
 								customTagInput = '';
 								if (fileInput) fileInput.value = '';
 							}
@@ -507,17 +618,17 @@
 						<div class="join">
 							<button
 								type="button"
-								onclick={() => { postType = 'feed'; carouselUrls = []; uploadedUrl = ''; thumbnailUrlForPost = ''; imageDimensions = null; if (fileInput) fileInput.value = ''; }}
+								onclick={() => { postType = 'feed'; carouselUrls = []; carouselTagMap = {}; tagImageIndex = 0; uploadedUrl = ''; thumbnailUrlForPost = ''; imageDimensions = null; if (fileInput) fileInput.value = ''; }}
 								class="btn join-item btn-sm {postType === 'feed' ? 'btn-primary' : ''}"
 							>Feed</button>
 							<button
 								type="button"
-								onclick={() => { postType = 'carousel'; uploadedUrl = ''; thumbnailUrlForPost = ''; imageDimensions = null; if (fileInput) fileInput.value = ''; }}
+								onclick={() => { postType = 'carousel'; uploadedUrl = ''; thumbnailUrlForPost = ''; imageDimensions = null; if (fileInput) fileInput.value = ''; selectedTags = []; carouselTagMap = {}; tagImageIndex = 0; }}
 								class="btn join-item btn-sm {postType === 'carousel' ? 'btn-primary' : ''}"
 							>Carousel</button>
 							<button
 								type="button"
-								onclick={() => { postType = 'story'; carouselUrls = []; selectedTags = []; uploadedUrl = ''; thumbnailUrlForPost = ''; imageDimensions = null; if (fileInput) fileInput.value = ''; }}
+								onclick={() => { postType = 'story'; carouselUrls = []; selectedTags = []; carouselTagMap = {}; tagImageIndex = 0; uploadedUrl = ''; thumbnailUrlForPost = ''; imageDimensions = null; if (fileInput) fileInput.value = ''; }}
 								class="btn join-item btn-sm {postType === 'story' ? 'btn-primary' : ''}"
 							>Story</button>
 						</div>
@@ -527,10 +638,13 @@
 					{#if postType === 'carousel'}
 						<!-- Carousel image upload -->
 						<div class="flex flex-col gap-3">
-							<p class="label">Images <span class="font-normal text-base-content/40">({carouselUrls.length}/10, min 2) — drag to reorder</span></p>
+							<p class="label">Images
+								<span class="font-normal text-base-content/40">({carouselUrls.length}/10, min 2)</span>
+								<span class="hidden sm:inline font-normal text-base-content/40"> — drag to reorder</span>
+							</p>
 							{#if carouselUrls.length > 0}
 								<div
-									class="flex flex-wrap gap-2"
+									class="flex flex-wrap gap-2 pb-4 sm:pb-0"
 									ondragover={onCarouselContainerDragOver}
 									ondrop={onCarouselContainerDrop}
 								>
@@ -552,6 +666,23 @@
 												aria-label="Remove"
 											>✕</button>
 											<span class="absolute bottom-1 left-1 bg-black/60 text-white text-xs rounded px-1 pointer-events-none">{i + 1}</span>
+											<!-- Mobile reorder arrows (drag doesn't work on touch) -->
+											<div class="sm:hidden absolute -bottom-1.5 inset-x-0 flex justify-center gap-0.5">
+												<button
+													type="button"
+													onclick={() => moveCarouselItem(i, -1)}
+													disabled={i === 0}
+													class="btn btn-xs btn-circle btn-ghost bg-base-100/90 shadow-sm disabled:opacity-20 h-5 w-5 min-h-0 p-0 text-xs"
+													aria-label="Move left"
+												>‹</button>
+												<button
+													type="button"
+													onclick={() => moveCarouselItem(i, 1)}
+													disabled={i === carouselUrls.length - 1}
+													class="btn btn-xs btn-circle btn-ghost bg-base-100/90 shadow-sm disabled:opacity-20 h-5 w-5 min-h-0 p-0 text-xs"
+													aria-label="Move right"
+												>›</button>
+											</div>
 										</div>
 									{/each}
 								</div>
@@ -576,6 +707,14 @@
 								</div>
 							{/if}
 						</div>
+						{#if carouselUrls.length >= 2}
+							<button
+								type="button"
+								onclick={openFormPreview}
+								class="btn btn-ghost btn-xs self-start"
+							>Preview carousel</button>
+						{/if}
+
 						<!-- For carousel: first image goes in media_url for thumbnail, all urls in carousel_items -->
 						<input type="hidden" name="media_url" value={carouselUrls[0] ?? ''} />
 						<input type="hidden" name="carousel_items" value={JSON.stringify(carouselUrls)} />
@@ -679,10 +818,56 @@
 								bind:value={caption}
 								id="caption"
 								name="caption"
-								rows="4"
+								rows="8"
 								placeholder="Write your caption…"
 								class="textarea w-full"
 							></textarea>
+
+							<div class="flex flex-wrap items-center gap-2 mt-1.5">
+								<div class="join">
+									<div class="tooltip tooltip-bottom" data-tip="Promoting an upcoming show — generates a structured caption with venue, date, time and ticket info">
+										<button
+											type="button"
+											onclick={() => captionStyle = 'event'}
+											class="btn btn-xs join-item {captionStyle === 'event' ? 'btn-neutral' : 'btn-ghost border border-base-300'}"
+										>Event post</button>
+									</div>
+									<div class="tooltip tooltip-bottom" data-tip="Posting about a past event — polishes your caption without restructuring it into a promotion">
+										<button
+											type="button"
+											onclick={() => captionStyle = 'recap'}
+											class="btn btn-xs join-item {captionStyle === 'recap' ? 'btn-neutral' : 'btn-ghost border border-base-300'}"
+										>Recap</button>
+									</div>
+								</div>
+								<button
+									type="button"
+									onclick={generateCaption}
+									disabled={generatingCaption}
+									class="btn btn-xs btn-ghost border border-base-300 gap-1"
+								>
+									{#if generatingCaption}
+										<span class="loading loading-spinner loading-xs"></span>
+									{:else}
+										<svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+									{/if}
+									{generatingCaption ? 'Generating…' : caption.trim() ? 'Improve with AI' : 'Generate with AI'}
+								</button>
+								{#if captionHistory.length > 0}
+									<button
+										type="button"
+										onclick={undoCaption}
+										class="btn btn-xs btn-ghost border border-base-300 gap-1"
+										title="Undo to previous caption"
+									>
+										<svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+										Undo
+									</button>
+								{/if}
+								{#if generateError}
+									<span class="text-xs text-error">{generateError}</span>
+								{/if}
+							</div>
 
 							{#if data.snippets.length > 0}
 								<div class="mt-2">
@@ -707,7 +892,43 @@
 						<div class="flex flex-col gap-2">
 							<p class="label">Tag people <span class="font-normal text-base-content/40">(optional)</span></p>
 
-							{#if selectedTags.length > 0}
+							{#if postType === 'carousel' && carouselUrls.length > 0}
+								<!-- Image strip: pick which image to tag -->
+								<div class="flex flex-wrap gap-1.5">
+									{#each carouselUrls as url, i}
+										<button
+											type="button"
+											onclick={() => tagImageIndex = i}
+											class="relative h-11 w-11 rounded-box overflow-hidden border-2 shrink-0 transition
+												{tagImageIndex === i ? 'border-primary' : 'border-transparent hover:border-base-300'}"
+											title="Tag image {i + 1}"
+										>
+											<img src={url} alt="" class="h-full w-full object-cover" />
+											<span class="absolute bottom-0 inset-x-0 text-center text-white text-[9px] leading-3 bg-black/50 py-0.5">{i + 1}</span>
+											{#if (carouselTagMap[i]?.length ?? 0) > 0}
+												<span class="absolute top-0.5 right-0.5 badge badge-primary badge-xs min-w-3 h-3 p-0 text-[9px]">{carouselTagMap[i].length}</span>
+											{/if}
+										</button>
+									{/each}
+								</div>
+								<p class="text-xs text-base-content/50">Tagging image {tagImageIndex + 1}</p>
+							{/if}
+
+							<!-- Existing tags -->
+							{#if postType === 'carousel'}
+								{@const allCarouselTags = Object.entries(carouselTagMap).flatMap(([idx, tags]) => tags.map(t => ({ tag: t, idx: +idx })))}
+								{#if allCarouselTags.length > 0}
+									<div class="flex flex-wrap gap-1.5">
+										{#each allCarouselTags as { tag, idx }}
+											<span class="badge badge-neutral gap-1">
+												@{tag}
+												<span class="opacity-40 text-[10px]">img {idx + 1}</span>
+												<button type="button" onclick={() => removeCarouselTag(idx, tag)} class="opacity-60 hover:opacity-100" aria-label="Remove">✕</button>
+											</span>
+										{/each}
+									</div>
+								{/if}
+							{:else if selectedTags.length > 0}
 								<div class="flex flex-wrap gap-1.5 mb-1">
 									{#each selectedTags as tag}
 										<span class="badge badge-neutral gap-1">
@@ -724,9 +945,9 @@
 										<button
 											type="button"
 											onclick={() => toggleTag(t.username)}
-											class="btn btn-xs rounded-full {selectedTags.includes(t.username) ? 'btn-neutral' : 'btn-ghost border border-base-300'}"
+											class="btn btn-xs rounded-full {activeTags.includes(t.username) ? 'btn-neutral' : 'btn-ghost border border-base-300'}"
 										>
-											{selectedTags.includes(t.username) ? '✓ ' : ''}{t.label}
+											{activeTags.includes(t.username) ? '✓ ' : ''}{t.label}
 										</button>
 									{/each}
 								</div>
@@ -745,7 +966,11 @@
 								<button type="button" onclick={addCustomTag} class="btn btn-ghost btn-sm">Add</button>
 							</div>
 						</div>
-						<input type="hidden" name="user_tags" value={JSON.stringify(selectedTags)} />
+						{#if postType === 'carousel'}
+							<input type="hidden" name="user_tags" value={JSON.stringify(carouselTagMap)} />
+						{:else}
+							<input type="hidden" name="user_tags" value={JSON.stringify(selectedTags)} />
+						{/if}
 					{/if}
 
 					<!-- When to post -->
@@ -930,7 +1155,10 @@
 					{:else}
 						<ul class="flex flex-col divide-y divide-base-200 -mx-6 -mt-4">
 							{#each data.history as post}
-								<li class="flex items-start gap-3 px-6 py-3.5">
+								<li
+									class="flex items-start gap-3 px-6 py-3.5 {post.caption ? 'cursor-pointer hover:bg-base-200/50 transition-colors' : ''}"
+									onclick={() => { if (post.caption) openViewCaption(post.caption); }}
+								>
 									<img
 										src={post.thumbnailUrl ?? post.mediaUrl}
 										alt=""

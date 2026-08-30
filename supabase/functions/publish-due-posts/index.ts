@@ -50,6 +50,7 @@ async function createMediaContainer(
 	const body = new URLSearchParams({ access_token: accessToken, ...params });
 	const res = await fetch(`${BASE_URL}/${igBusinessId}/media`, { method: 'POST', body });
 	const data = await res.json();
+	if (data.error) console.error('Instagram media API error:', JSON.stringify(data.error));
 	if (!data.id) throw new Error(data.error?.message ?? 'Failed to create Instagram media container');
 	return data.id as string;
 }
@@ -70,7 +71,12 @@ async function publishToInstagram(
 		if (post.user_tags) {
 			const usernames: string[] = JSON.parse(post.user_tags);
 			if (usernames.length > 0) {
-				params.user_tags = JSON.stringify(usernames.map((u) => ({ username: u, x: 0.5, y: 0.5 })));
+				params.user_tags = JSON.stringify(usernames.map((u, i) => {
+						const count = usernames.length;
+						const x = count === 1 ? 0.5 : Math.round((0.1 + (0.8 / (count - 1)) * i) * 100) / 100;
+						const y = count === 1 ? 0.5 : (i % 2 === 0 ? 0.35 : 0.65);
+						return { username: u, x, y };
+					}));
 			}
 		}
 		if (account.location_id) params.location_id = account.location_id;
@@ -93,13 +99,41 @@ async function publishCarousel(account: SocialAccount, post: ScheduledPost): Pro
 	const urls: string[] = JSON.parse(post.carousel_items ?? '[]');
 	if (urls.length < 2) throw new Error('Carousel requires at least 2 images');
 
+	// Per-image tags: Record<string, string[]> keyed by image index
+	let tagMap: Record<string, string[]> = {};
+	if (post.user_tags) {
+		try {
+			const parsed = JSON.parse(post.user_tags);
+			// Carousel format is an object; flat array means legacy/non-carousel — skip
+			if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+				tagMap = parsed;
+			}
+		} catch { /* ignore */ }
+	}
+	console.log(`[carousel ${post.id}] tagMap:`, JSON.stringify(tagMap));
+
 	// Step 1: create a container for each image
 	const itemIds: string[] = [];
-	for (const url of urls) {
-		const id = await createMediaContainer(account.ig_business_id, account.access_token, {
-			image_url: url,
+	for (let idx = 0; idx < urls.length; idx++) {
+		const itemParams: Record<string, string> = {
+			image_url: urls[idx],
 			is_carousel_item: 'true'
-		});
+		};
+		const imageTags = tagMap[String(idx)];
+		if (imageTags?.length) {
+			const tagPayload = imageTags.map((u, i) => {
+				const count = imageTags.length;
+				const x = count === 1 ? 0.5 : Math.round((0.1 + (0.8 / (count - 1)) * i) * 100) / 100;
+				const y = count === 1 ? 0.5 : (i % 2 === 0 ? 0.35 : 0.65);
+				return { username: u, x, y };
+			});
+			itemParams.user_tags = JSON.stringify(tagPayload);
+			console.log(`[carousel ${post.id}] image ${idx} tags:`, JSON.stringify(tagPayload));
+		} else {
+			console.log(`[carousel ${post.id}] image ${idx}: no tags`);
+		}
+		const id = await createMediaContainer(account.ig_business_id, account.access_token, itemParams);
+		console.log(`[carousel ${post.id}] image ${idx} container id:`, id);
 		itemIds.push(id);
 	}
 

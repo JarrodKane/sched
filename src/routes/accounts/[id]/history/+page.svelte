@@ -48,9 +48,24 @@
 	}
 
 	let brokenImages = $state(new Set<string>());
+	let expandedPosts = $state(new Set<string>());
+	let copiedPost = $state<string | null>(null);
 
 	function thumbSrc(post: Post) {
 		return post.thumbnailUrl ?? post.mediaUrl;
+	}
+
+	function toggleCaption(id: string) {
+		const next = new Set(expandedPosts);
+		if (next.has(id)) next.delete(id);
+		else next.add(id);
+		expandedPosts = next;
+	}
+
+	async function copyCaption(id: string, caption: string) {
+		await navigator.clipboard.writeText(caption);
+		copiedPost = id;
+		setTimeout(() => { copiedPost = null; }, 1500);
 	}
 </script>
 
@@ -118,7 +133,24 @@
 
 									<!-- Caption -->
 									{#if post.caption}
-										<p class="text-xs text-base-content/60 line-clamp-2 mt-1 leading-snug">{post.caption}</p>
+										{@const expanded = expandedPosts.has(post.id)}
+										<p
+											class="text-xs text-base-content/60 mt-1 leading-snug whitespace-pre-line cursor-pointer {expanded ? '' : 'line-clamp-2'}"
+											onclick={() => toggleCaption(post.id)}
+											title={expanded ? 'Click to collapse' : 'Click to expand'}
+										>{post.caption}</p>
+										{#if expanded}
+											<div class="flex items-center gap-2 mt-1.5">
+												<button
+													class="btn btn-ghost btn-xs text-base-content/40"
+													onclick={() => toggleCaption(post.id)}
+												>Show less</button>
+												<button
+													class="btn btn-ghost btn-xs text-base-content/40"
+													onclick={() => copyCaption(post.id, post.caption!)}
+												>{copiedPost === post.id ? 'Copied!' : 'Copy caption'}</button>
+											</div>
+										{/if}
 									{/if}
 
 									<!-- Error -->

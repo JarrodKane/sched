@@ -250,7 +250,7 @@
 	}
 </script>
 
-<dialog bind:this={dialog} class="modal" onclose={onDialogClose}>
+<dialog bind:this={dialog} class="modal modal-bottom sm:modal-middle" onclose={onDialogClose}>
 	<div class="modal-box max-w-lg w-full flex flex-col gap-4 max-h-[94dvh] overflow-y-auto">
 
 		<!-- Header -->
