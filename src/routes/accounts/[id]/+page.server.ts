@@ -2,7 +2,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { users, socialAccounts, scheduledPosts, captionSnippets, tagSnippets } from '$lib/server/db/schema';
 import { eq, and, asc, desc, gte, inArray } from 'drizzle-orm';
-import { canModifyPost } from '$lib/server/access';
+import { canAccessAccount, canModifyPost } from '$lib/server/access';
 import { supabaseAdmin } from '$lib/server/supabase-admin';
 import type { Actions, PageServerLoad } from './$types';
 
