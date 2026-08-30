@@ -1,6 +1,6 @@
 import { fail } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { users, socialAccounts, captionSnippets, tagSnippets } from '$lib/server/db/schema';
+import { users, socialAccounts, captionSnippets, tagSnippets, shows } from '$lib/server/db/schema';
 import { eq, asc } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -12,10 +12,11 @@ async function requireAdmin(locals: App.Locals) {
 }
 
 export const load: PageServerLoad = async ({ url }) => {
-	const [accounts, allSnippets, allTagSnippets] = await Promise.all([
+	const [accounts, allSnippets, allTagSnippets, allShows] = await Promise.all([
 		db.select().from(socialAccounts).orderBy(socialAccounts.label),
 		db.select().from(captionSnippets).orderBy(asc(captionSnippets.sortOrder), asc(captionSnippets.createdAt)),
-		db.select().from(tagSnippets).orderBy(asc(tagSnippets.sortOrder), asc(tagSnippets.createdAt))
+		db.select().from(tagSnippets).orderBy(asc(tagSnippets.sortOrder), asc(tagSnippets.createdAt)),
+		db.select().from(shows).orderBy(asc(shows.createdAt))
 	]);
 
 	const snippetsByAccount = new Map<string, typeof allSnippets>();
@@ -32,11 +33,19 @@ export const load: PageServerLoad = async ({ url }) => {
 		tagSnippetsByAccount.set(t.accountId, existing);
 	}
 
+	const showsByAccount = new Map<string, typeof allShows>();
+	for (const s of allShows) {
+		const existing = showsByAccount.get(s.accountId) ?? [];
+		existing.push(s);
+		showsByAccount.set(s.accountId, existing);
+	}
+
 	return {
 		accounts: accounts.map((a) => ({
 			...a,
 			snippets: snippetsByAccount.get(a.id) ?? [],
-			tagSnippets: tagSnippetsByAccount.get(a.id) ?? []
+			tagSnippets: tagSnippetsByAccount.get(a.id) ?? [],
+			shows: showsByAccount.get(a.id) ?? []
 		})),
 		connectMessage: url.searchParams.get('message'),
 		connectError: url.searchParams.get('error')
@@ -137,5 +146,46 @@ export const actions: Actions = {
 
 		await db.delete(tagSnippets).where(eq(tagSnippets.id, id));
 		return { tagSnippetDeleted: true };
+	},
+
+	addShow: async ({ request, locals }) => {
+		if (!await requireAdmin(locals)) return fail(403, { showError: 'Access denied' });
+
+		const form = await request.formData();
+		const accountId = (form.get('account_id') as string)?.trim();
+		const name = (form.get('show_name') as string)?.trim();
+		const humanitixEventId = (form.get('humanitix_event_id') as string)?.trim() || null;
+		const eventbriteEventId = (form.get('eventbrite_event_id') as string)?.trim() || null;
+
+		if (!accountId || !name) return fail(400, { showError: 'Show name is required.' });
+		if (!humanitixEventId && !eventbriteEventId) {
+			return fail(400, { showError: 'At least one ticket platform ID is required.' });
+		}
+
+		await db.insert(shows).values({ accountId, name, humanitixEventId, eventbriteEventId });
+		return { showAdded: true };
+	},
+
+	deleteShow: async ({ request, locals }) => {
+		if (!await requireAdmin(locals)) return fail(403, { showError: 'Access denied' });
+
+		const form = await request.formData();
+		const id = (form.get('id') as string)?.trim();
+		if (!id) return fail(400, { showError: 'Missing show ID.' });
+
+		await db.delete(shows).where(eq(shows.id, id));
+		return { showDeleted: true };
+	},
+
+	toggleShow: async ({ request, locals }) => {
+		if (!await requireAdmin(locals)) return fail(403, { showError: 'Access denied' });
+
+		const form = await request.formData();
+		const id = (form.get('id') as string)?.trim();
+		const active = form.get('active') === 'true';
+		if (!id) return fail(400, { showError: 'Missing show ID.' });
+
+		await db.update(shows).set({ isActive: !active }).where(eq(shows.id, id));
+		return { showToggled: true };
 	}
 };

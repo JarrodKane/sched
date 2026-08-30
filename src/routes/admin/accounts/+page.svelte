@@ -94,6 +94,18 @@
 {#if form?.tagSnippetError}
 	<div role="alert" class="alert alert-error alert-soft mb-4 text-sm">{form.tagSnippetError}</div>
 {/if}
+{#if form?.showAdded}
+	<div role="alert" class="alert alert-success alert-soft mb-4 text-sm">Show added.</div>
+{/if}
+{#if form?.showDeleted}
+	<div role="alert" class="alert alert-success alert-soft mb-4 text-sm">Show removed.</div>
+{/if}
+{#if form?.showToggled}
+	<div role="alert" class="alert alert-success alert-soft mb-4 text-sm">Show updated.</div>
+{/if}
+{#if form?.showError}
+	<div role="alert" class="alert alert-error alert-soft mb-4 text-sm">{form.showError}</div>
+{/if}
 
 <!-- Accounts table -->
 {#if data.accounts.length > 0}
@@ -284,3 +296,93 @@
 	</div>
 </section>
 
+<!-- Shows (ticket tracking) per account -->
+<section class="mb-12">
+	<h2 class="mb-1 text-sm font-semibold uppercase tracking-wide text-base-content/50">Shows &amp; ticket tracking</h2>
+	<p class="mb-5 text-sm text-base-content/50">
+		Link shows to Humanitix or Eventbrite events to track ticket sales. Tickets are checked automatically based on Melbourne time — every 5 min at show time, hourly off-peak, quiet midnight–6am.
+	</p>
+	<div class="flex flex-col gap-4">
+		{#each data.accounts as acct}
+			<div class="card bg-base-100">
+				<div class="card-body gap-4">
+					<h3 class="font-medium">{acct.label}</h3>
+
+					{#if acct.shows.length > 0}
+						<ul class="flex flex-col gap-1.5">
+							{#each acct.shows as show}
+								<li class="flex items-center justify-between gap-3 rounded-box bg-base-200 px-3 py-2">
+									<div class="min-w-0 flex-1">
+										<div class="flex items-center gap-2">
+											<p class="text-xs font-medium">{show.name}</p>
+											{#if !show.isActive}
+												<span class="badge badge-xs badge-ghost">Paused</span>
+											{/if}
+										</div>
+										<p class="mt-0.5 text-xs text-base-content/40">
+											{#if show.humanitixEventId}Humanitix: <span class="font-mono">{show.humanitixEventId}</span>{/if}
+											{#if show.humanitixEventId && show.eventbriteEventId} · {/if}
+											{#if show.eventbriteEventId}Eventbrite: <span class="font-mono">{show.eventbriteEventId}</span>{/if}
+										</p>
+									</div>
+									<div class="flex items-center gap-1 shrink-0">
+										<form method="POST" action="?/toggleShow" use:enhance>
+											<input type="hidden" name="id" value={show.id} />
+											<input type="hidden" name="active" value={show.isActive ? 'true' : 'false'} />
+											<button type="submit" class="btn btn-ghost btn-xs">
+												{show.isActive ? 'Pause' : 'Resume'}
+											</button>
+										</form>
+										<form method="POST" action="?/deleteShow" use:enhance>
+											<input type="hidden" name="id" value={show.id} />
+											<button
+												type="submit"
+												class="btn btn-ghost btn-xs text-error"
+												onclick={(e) => { if (!confirm('Remove this show and all its ticket history?')) e.preventDefault(); }}
+											>Remove</button>
+										</form>
+									</div>
+								</li>
+							{/each}
+						</ul>
+					{:else}
+						<p class="text-xs text-base-content/40">No shows linked yet.</p>
+					{/if}
+
+					<form method="POST" action="?/addShow" use:enhance class="flex flex-wrap items-end gap-2">
+						<input type="hidden" name="account_id" value={acct.id} />
+						<fieldset class="fieldset">
+							<legend class="fieldset-legend">Show name</legend>
+							<input
+								name="show_name"
+								type="text"
+								required
+								placeholder="Comedy Therapy"
+								class="input input-sm w-44"
+							/>
+						</fieldset>
+						<fieldset class="fieldset">
+							<legend class="fieldset-legend">Humanitix event ID</legend>
+							<input
+								name="humanitix_event_id"
+								type="text"
+								placeholder="6a575527bd266af6e1..."
+								class="input input-sm w-52 font-mono text-xs"
+							/>
+						</fieldset>
+						<fieldset class="fieldset">
+							<legend class="fieldset-legend">Eventbrite event ID</legend>
+							<input
+								name="eventbrite_event_id"
+								type="text"
+								placeholder="12345678901"
+								class="input input-sm w-40 font-mono text-xs"
+							/>
+						</fieldset>
+						<button type="submit" class="btn btn-sm btn-neutral">Add show</button>
+					</form>
+				</div>
+			</div>
+		{/each}
+	</div>
+</section>
