@@ -2,7 +2,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { users, socialAccounts, scheduledPosts, captionSnippets, tagSnippets } from '$lib/server/db/schema';
 import { eq, and, asc, desc, gte, inArray } from 'drizzle-orm';
-import { canAccessAccount, canModifyPost } from '$lib/server/access';
+import { canModifyPost } from '$lib/server/access';
 import { supabaseAdmin } from '$lib/server/supabase-admin';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -14,13 +14,22 @@ async function getProfile(locals: App.Locals) {
 }
 
 export const load: PageServerLoad = async ({ params, parent }) => {
-	const { profile } = await parent();
+	const { profile, canAccessSocial, accountMeta } = await parent();
 	if (!profile) redirect(303, '/login');
 
-	// Run all independent queries in parallel after the profile is resolved
+	// Layout already enforced account access — just load what's needed for each view
+	if (!canAccessSocial) {
+		// Overview: only need the upcoming queue count
+		const queue = await db
+			.select()
+			.from(scheduledPosts)
+			.where(and(eq(scheduledPosts.accountId, params.id), inArray(scheduledPosts.status, ['pending', 'publishing'])))
+			.orderBy(asc(scheduledPosts.scheduledFor));
+		return { account: accountMeta, queue, priorUploads: [], snippets: [], tagSnippets: [], history: [] };
+	}
+
 	const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-	const [allowed, accountRows, queue, storageResult, snippets, tags, history] = await Promise.all([
-		canAccessAccount(profile.id, params.id, profile.isAdmin),
+	const [accountRows, queue, storageResult, snippets, tags, history] = await Promise.all([
 		db.select().from(socialAccounts).where(eq(socialAccounts.id, params.id)).limit(1),
 		db
 			.select()
@@ -65,7 +74,6 @@ export const load: PageServerLoad = async ({ params, parent }) => {
 			.limit(20)
 	]);
 
-	if (!allowed) error(403, 'Access denied');
 	const account = accountRows[0];
 	if (!account) error(404, 'Account not found');
 

@@ -1,7 +1,7 @@
 import { fail } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { users, socialAccounts, captionSnippets, tagSnippets, shows } from '$lib/server/db/schema';
-import { eq, asc } from 'drizzle-orm';
+import { users, socialAccounts } from '$lib/server/db/schema';
+import { eq, isNull } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
 
 async function requireAdmin(locals: App.Locals) {
@@ -12,41 +12,9 @@ async function requireAdmin(locals: App.Locals) {
 }
 
 export const load: PageServerLoad = async ({ url }) => {
-	const [accounts, allSnippets, allTagSnippets, allShows] = await Promise.all([
-		db.select().from(socialAccounts).orderBy(socialAccounts.label),
-		db.select().from(captionSnippets).orderBy(asc(captionSnippets.sortOrder), asc(captionSnippets.createdAt)),
-		db.select().from(tagSnippets).orderBy(asc(tagSnippets.sortOrder), asc(tagSnippets.createdAt)),
-		db.select().from(shows).orderBy(asc(shows.createdAt))
-	]);
-
-	const snippetsByAccount = new Map<string, typeof allSnippets>();
-	for (const s of allSnippets) {
-		const existing = snippetsByAccount.get(s.accountId) ?? [];
-		existing.push(s);
-		snippetsByAccount.set(s.accountId, existing);
-	}
-
-	const tagSnippetsByAccount = new Map<string, typeof allTagSnippets>();
-	for (const t of allTagSnippets) {
-		const existing = tagSnippetsByAccount.get(t.accountId) ?? [];
-		existing.push(t);
-		tagSnippetsByAccount.set(t.accountId, existing);
-	}
-
-	const showsByAccount = new Map<string, typeof allShows>();
-	for (const s of allShows) {
-		const existing = showsByAccount.get(s.accountId) ?? [];
-		existing.push(s);
-		showsByAccount.set(s.accountId, existing);
-	}
-
+	const accounts = await db.select().from(socialAccounts).where(isNull(socialAccounts.deletedAt)).orderBy(socialAccounts.label);
 	return {
-		accounts: accounts.map((a) => ({
-			...a,
-			snippets: snippetsByAccount.get(a.id) ?? [],
-			tagSnippets: tagSnippetsByAccount.get(a.id) ?? [],
-			shows: showsByAccount.get(a.id) ?? []
-		})),
+		accounts,
 		connectMessage: url.searchParams.get('message'),
 		connectError: url.searchParams.get('error')
 	};
@@ -83,109 +51,11 @@ export const actions: Actions = {
 
 		const form = await request.formData();
 		const id = form.get('id') as string;
+		const confirm = (form.get('confirm') as string)?.toLowerCase().trim();
 		if (!id) return fail(400, { removeError: 'Missing account ID.' });
+		if (confirm !== 'delete') return fail(400, { removeError: 'Confirmation text did not match.' });
 
-		await db.delete(socialAccounts).where(eq(socialAccounts.id, id));
+		await db.update(socialAccounts).set({ deletedAt: new Date() }).where(eq(socialAccounts.id, id));
 		return { removed: true };
-	},
-
-	addSnippet: async ({ request, locals }) => {
-		if (!await requireAdmin(locals)) return fail(403, { snippetError: 'Access denied', snippetAccountId: '' });
-
-		const form = await request.formData();
-		const accountId = (form.get('account_id') as string)?.trim();
-		const snippetLabel = (form.get('snippet_label') as string)?.trim();
-		const snippetText = (form.get('snippet_text') as string) ?? '';
-
-		if (!accountId || !snippetLabel || !snippetText.trim()) {
-			return fail(400, { snippetError: 'Label and text are required.', snippetAccountId: accountId });
-		}
-
-		await db.insert(captionSnippets).values({
-			accountId,
-			label: snippetLabel,
-			text: snippetText
-		});
-
-		return { snippetAdded: true };
-	},
-
-	deleteSnippet: async ({ request, locals }) => {
-		if (!await requireAdmin(locals)) return fail(403, { snippetError: 'Access denied' });
-
-		const form = await request.formData();
-		const id = (form.get('id') as string)?.trim();
-		if (!id) return fail(400, { snippetError: 'Missing snippet ID.' });
-
-		await db.delete(captionSnippets).where(eq(captionSnippets.id, id));
-		return { snippetDeleted: true };
-	},
-
-	addTagSnippet: async ({ request, locals }) => {
-		if (!await requireAdmin(locals)) return fail(403, { tagSnippetError: 'Access denied' });
-
-		const form = await request.formData();
-		const accountId = (form.get('account_id') as string)?.trim();
-		const label = (form.get('tag_label') as string)?.trim();
-		const username = (form.get('tag_username') as string)?.trim().replace(/^@/, '');
-
-		if (!accountId || !label || !username) {
-			return fail(400, { tagSnippetError: 'Label and username are required.' });
-		}
-
-		await db.insert(tagSnippets).values({ accountId, label, username });
-		return { tagSnippetAdded: true };
-	},
-
-	deleteTagSnippet: async ({ request, locals }) => {
-		if (!await requireAdmin(locals)) return fail(403, { tagSnippetError: 'Access denied' });
-
-		const form = await request.formData();
-		const id = (form.get('id') as string)?.trim();
-		if (!id) return fail(400, { tagSnippetError: 'Missing ID.' });
-
-		await db.delete(tagSnippets).where(eq(tagSnippets.id, id));
-		return { tagSnippetDeleted: true };
-	},
-
-	addShow: async ({ request, locals }) => {
-		if (!await requireAdmin(locals)) return fail(403, { showError: 'Access denied' });
-
-		const form = await request.formData();
-		const accountId = (form.get('account_id') as string)?.trim();
-		const name = (form.get('show_name') as string)?.trim();
-		const humanitixEventId = (form.get('humanitix_event_id') as string)?.trim() || null;
-		const eventbriteEventId = (form.get('eventbrite_event_id') as string)?.trim() || null;
-
-		if (!accountId || !name) return fail(400, { showError: 'Show name is required.' });
-		if (!humanitixEventId && !eventbriteEventId) {
-			return fail(400, { showError: 'At least one ticket platform ID is required.' });
-		}
-
-		await db.insert(shows).values({ accountId, name, humanitixEventId, eventbriteEventId });
-		return { showAdded: true };
-	},
-
-	deleteShow: async ({ request, locals }) => {
-		if (!await requireAdmin(locals)) return fail(403, { showError: 'Access denied' });
-
-		const form = await request.formData();
-		const id = (form.get('id') as string)?.trim();
-		if (!id) return fail(400, { showError: 'Missing show ID.' });
-
-		await db.delete(shows).where(eq(shows.id, id));
-		return { showDeleted: true };
-	},
-
-	toggleShow: async ({ request, locals }) => {
-		if (!await requireAdmin(locals)) return fail(403, { showError: 'Access denied' });
-
-		const form = await request.formData();
-		const id = (form.get('id') as string)?.trim();
-		const active = form.get('active') === 'true';
-		if (!id) return fail(400, { showError: 'Missing show ID.' });
-
-		await db.update(shows).set({ isActive: !active }).where(eq(shows.id, id));
-		return { showToggled: true };
 	}
 };

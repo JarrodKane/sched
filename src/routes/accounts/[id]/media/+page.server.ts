@@ -1,6 +1,6 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { users, socialAccounts, scheduledPosts } from '$lib/server/db/schema';
+import { users, scheduledPosts } from '$lib/server/db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { canAccessAccount } from '$lib/server/access';
 import { supabaseAdmin } from '$lib/server/supabase-admin';
@@ -16,18 +16,10 @@ async function getProfile(locals: App.Locals) {
 }
 
 export const load: PageServerLoad = async ({ params, parent }) => {
-	const { profile } = await parent();
+	// Layout already verified access and fetched accountMeta — no need to re-check
+	const { profile, accountMeta } = await parent();
 	if (!profile) redirect(303, '/login');
-
-	const allowed = await canAccessAccount(profile.id, params.id, profile.isAdmin);
-	if (!allowed) error(403, 'Access denied');
-
-	const [account] = await db
-		.select({ id: socialAccounts.id, label: socialAccounts.label })
-		.from(socialAccounts)
-		.where(eq(socialAccounts.id, params.id))
-		.limit(1);
-	if (!account) error(404, 'Account not found');
+	const account = accountMeta;
 
 	const { data: storageFiles, error: listErr } = await supabaseAdmin.storage
 		.from(BUCKET)

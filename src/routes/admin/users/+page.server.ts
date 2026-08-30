@@ -19,17 +19,17 @@ export const load: PageServerLoad = async () => {
 		db.select().from(userAccountAccess)
 	]);
 
-	// Map accountId[] per user
-	const accessByUser = new Map<string, string[]>();
+	// Map access rows per user: { accountId, canAccessSocial, canAccessTickets, canAccessLineups }
+	const accessByUser = new Map<string, typeof allAccess>();
 	for (const row of allAccess) {
 		const existing = accessByUser.get(row.userId) ?? [];
-		existing.push(row.accountId);
+		existing.push(row);
 		accessByUser.set(row.userId, existing);
 	}
 
 	const usersWithAccess = allUsers.map((u) => ({
 		...u,
-		accountIds: accessByUser.get(u.id) ?? []
+		access: accessByUser.get(u.id) ?? []
 	}));
 
 	return { users: usersWithAccess, accounts: allAccounts };
@@ -52,7 +52,6 @@ export const actions: Actions = {
 			return fail(400, { createError: 'Password must be at least 8 characters.' });
 		}
 
-		// Create the auth user via service role
 		const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
 			email,
 			password,
@@ -62,7 +61,6 @@ export const actions: Actions = {
 			return fail(400, { createError: authError.message });
 		}
 
-		// Create profile row
 		await db.insert(users).values({ id: authData.user.id, email, name, isAdmin });
 
 		return { created: true };
@@ -75,7 +73,6 @@ export const actions: Actions = {
 		const userId = form.get('user_id') as string;
 		if (!userId) return fail(400, { deleteError: 'Missing user ID.' });
 
-		// Delete auth user (cascades to our users table via FK if RLS allows, or we do it manually)
 		const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId);
 		if (authError) return fail(500, { deleteError: authError.message });
 
@@ -97,7 +94,13 @@ export const actions: Actions = {
 
 		if (accountIds.length > 0) {
 			await db.insert(userAccountAccess).values(
-				accountIds.map((accountId) => ({ userId, accountId }))
+				accountIds.map((accountId) => ({
+					userId,
+					accountId,
+					canAccessSocial: form.get(`social_${accountId}`) === 'on',
+					canAccessTickets: form.get(`tickets_${accountId}`) === 'on',
+					canAccessLineups: form.get(`lineups_${accountId}`) === 'on'
+				}))
 			);
 		}
 

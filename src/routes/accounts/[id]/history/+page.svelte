@@ -1,21 +1,10 @@
 <script lang="ts">
 	import type { PageData } from './$types';
+	import { relativeTimePast } from '$lib/format';
 
 	let { data }: { data: PageData } = $props();
 
 	type Post = (typeof data.posts)[0];
-
-	function relativeTime(date: string | Date): string {
-		const diff = Date.now() - new Date(date).getTime();
-		if (diff < 60_000) return 'just now';
-		const mins = Math.round(diff / 60_000);
-		if (mins < 60) return `${mins}m ago`;
-		const hours = Math.floor(mins / 60);
-		if (hours < 24) return `${hours}h ago`;
-		const days = Math.floor(hours / 24);
-		if (days < 30) return `${days}d ago`;
-		return new Date(date).toLocaleDateString();
-	}
 
 	function formatTime(date: string | Date): string {
 		return new Date(date).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
@@ -122,7 +111,7 @@
 									<!-- Time -->
 									{#if post.publishedAt}
 										<p class="text-xs text-base-content/60">
-											{relativeTime(post.publishedAt)}
+											{relativeTimePast(post.publishedAt)}
 											<span class="text-base-content/30 ml-1">· {formatTime(post.publishedAt)}</span>
 										</p>
 									{:else if post.status === 'failed'}
@@ -142,11 +131,11 @@
 										{#if expanded}
 											<div class="flex items-center gap-2 mt-1.5">
 												<button
-													class="btn btn-ghost btn-xs text-base-content/40"
+													class="btn btn-xs btn-soft btn-neutral"
 													onclick={() => toggleCaption(post.id)}
 												>Show less</button>
 												<button
-													class="btn btn-ghost btn-xs text-base-content/40"
+													class="btn btn-xs btn-soft btn-neutral"
 													onclick={() => copyCaption(post.id, post.caption!)}
 												>{copiedPost === post.id ? 'Copied!' : 'Copy caption'}</button>
 											</div>

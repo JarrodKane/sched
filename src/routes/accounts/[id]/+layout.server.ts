@@ -1,23 +1,32 @@
 import { error, redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { socialAccounts } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
-import { canAccessAccount } from '$lib/server/access';
+import { and, eq, isNull } from 'drizzle-orm';
+import { getAccessRow } from '$lib/server/access';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async ({ params, parent }) => {
 	const { profile } = await parent();
 	if (!profile) redirect(303, '/login');
 
-	const allowed = await canAccessAccount(profile.id, params.id, profile.isAdmin);
-	if (!allowed) error(403, 'Access denied');
+	let canAccessSocial = true;
+	let canAccessTickets = true;
+	let canAccessLineups = false;
+
+	if (!profile.isAdmin) {
+		const row = await getAccessRow(profile.id, params.id);
+		if (!row) error(403, 'Access denied');
+		canAccessSocial = row.canAccessSocial;
+		canAccessTickets = row.canAccessTickets;
+		canAccessLineups = row.canAccessLineups;
+	}
 
 	const [account] = await db
 		.select({ id: socialAccounts.id, label: socialAccounts.label })
 		.from(socialAccounts)
-		.where(eq(socialAccounts.id, params.id))
+		.where(and(eq(socialAccounts.id, params.id), isNull(socialAccounts.deletedAt)))
 		.limit(1);
 	if (!account) error(404, 'Account not found');
 
-	return { accountMeta: account };
+	return { accountMeta: account, canAccessSocial, canAccessTickets, canAccessLineups };
 };

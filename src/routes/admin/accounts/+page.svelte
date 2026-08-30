@@ -4,9 +4,6 @@
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
-	// Track which snippet text areas are expanded (for multiline preview)
-	let snippetExpanded = $state<Record<string, boolean>>({});
-
 	const EXPIRY_WARN_DAYS = 7;
 
 	function isExpiringSoon(expiresAt: Date | string | null): boolean {
@@ -18,6 +15,19 @@
 	function isExpired(expiresAt: Date | string | null): boolean {
 		if (!expiresAt) return false;
 		return new Date(expiresAt).getTime() < Date.now();
+	}
+
+	let deleteTarget = $state<{ id: string; label: string } | null>(null);
+	let confirmText = $state('');
+
+	function openDelete(id: string, label: string) {
+		deleteTarget = { id, label };
+		confirmText = '';
+	}
+
+	function closeDelete() {
+		deleteTarget = null;
+		confirmText = '';
 	}
 </script>
 
@@ -60,7 +70,6 @@
 	</div>
 {/if}
 
-<!-- Flash messages -->
 {#if data.connectMessage}
 	<div role="alert" class="alert alert-success alert-soft mb-4 text-sm">{data.connectMessage}</div>
 {/if}
@@ -76,313 +85,80 @@
 {#if form?.removed}
 	<div role="alert" class="alert alert-success alert-soft mb-4 text-sm">Account removed.</div>
 {/if}
-{#if form?.snippetAdded}
-	<div role="alert" class="alert alert-success alert-soft mb-4 text-sm">Caption snippet added.</div>
-{/if}
-{#if form?.snippetDeleted}
-	<div role="alert" class="alert alert-success alert-soft mb-4 text-sm">Caption snippet deleted.</div>
-{/if}
-{#if form?.snippetError}
-	<div role="alert" class="alert alert-error alert-soft mb-4 text-sm">{form.snippetError}</div>
-{/if}
-{#if form?.tagSnippetAdded}
-	<div role="alert" class="alert alert-success alert-soft mb-4 text-sm">Tag saved.</div>
-{/if}
-{#if form?.tagSnippetDeleted}
-	<div role="alert" class="alert alert-success alert-soft mb-4 text-sm">Tag deleted.</div>
-{/if}
-{#if form?.tagSnippetError}
-	<div role="alert" class="alert alert-error alert-soft mb-4 text-sm">{form.tagSnippetError}</div>
-{/if}
-{#if form?.showAdded}
-	<div role="alert" class="alert alert-success alert-soft mb-4 text-sm">Show added.</div>
-{/if}
-{#if form?.showDeleted}
-	<div role="alert" class="alert alert-success alert-soft mb-4 text-sm">Show removed.</div>
-{/if}
-{#if form?.showToggled}
-	<div role="alert" class="alert alert-success alert-soft mb-4 text-sm">Show updated.</div>
-{/if}
-{#if form?.showError}
-	<div role="alert" class="alert alert-error alert-soft mb-4 text-sm">{form.showError}</div>
-{/if}
 
-<!-- Accounts table -->
+<!-- Accounts list -->
 {#if data.accounts.length > 0}
-	<div class="overflow-x-auto mb-10">
-		<table class="table">
-			<thead>
-				<tr>
-					<th>Label</th>
-					<th>IG Business ID</th>
-					<th>Token expires</th>
-					<th></th>
-				</tr>
-			</thead>
-			<tbody>
-				{#each data.accounts as acct}
-					<tr>
-						<td class="font-medium">{acct.label}</td>
-						<td class="font-mono text-xs text-base-content/50">{acct.igBusinessId}</td>
-						<td>
+	<ul class="flex flex-col gap-2 mb-10">
+		{#each data.accounts as acct}
+			<li class="card bg-base-100">
+				<div class="card-body py-3 px-4 flex-row items-center gap-4">
+					<div class="flex-1 min-w-0">
+						<p class="font-medium">{acct.label}</p>
+						<div class="flex items-center gap-2 mt-0.5">
 							{#if acct.tokenExpiresAt}
-								<span class={isExpired(acct.tokenExpiresAt) ? 'text-error font-medium' : isExpiringSoon(acct.tokenExpiresAt) ? 'text-warning font-medium' : 'text-base-content/60'}>
-									{new Date(acct.tokenExpiresAt).toLocaleDateString()}
-									{isExpired(acct.tokenExpiresAt) ? '(expired)' : isExpiringSoon(acct.tokenExpiresAt) ? '(expiring soon)' : ''}
-								</span>
+								{#if isExpired(acct.tokenExpiresAt)}
+									<span class="badge badge-error badge-soft badge-xs">Token expired</span>
+								{:else if isExpiringSoon(acct.tokenExpiresAt)}
+									<span class="badge badge-warning badge-soft badge-xs">Expires {new Date(acct.tokenExpiresAt).toLocaleDateString()}</span>
+								{:else}
+									<span class="text-xs text-base-content/40">Token valid until {new Date(acct.tokenExpiresAt).toLocaleDateString()}</span>
+								{/if}
 							{:else}
-								<span class="text-base-content/30">—</span>
+								<span class="text-xs text-base-content/30">No token expiry set</span>
 							{/if}
-						</td>
-						<td class="text-right">
-							<div class="flex items-center justify-end gap-1">
-								<a
-									href="/admin/accounts/connect?account_id={acct.id}"
-									class="btn btn-ghost btn-xs"
-									title="Re-run Instagram OAuth to refresh this account's token"
-								>
-									Reconnect
-								</a>
-								<form method="POST" action="?/remove" use:enhance>
-									<input type="hidden" name="id" value={acct.id} />
-									<button
-										type="submit"
-										class="btn btn-ghost btn-xs text-error"
-										onclick={(e) => { if (!confirm('Remove this account?')) e.preventDefault(); }}
-									>
-										Remove
-									</button>
-								</form>
-							</div>
-						</td>
-					</tr>
-				{/each}
-			</tbody>
-		</table>
-	</div>
+						</div>
+					</div>
+					<div class="flex items-center gap-1 shrink-0">
+						<a href="/admin/accounts/{acct.id}" class="btn btn-sm btn-soft btn-neutral">Manage</a>
+						<a href="/admin/accounts/connect?account_id={acct.id}" class="btn btn-sm btn-outline">Reconnect</a>
+						<button
+							type="button"
+							class="btn btn-sm btn-soft btn-error"
+							onclick={() => openDelete(acct.id, acct.label)}
+						>Remove</button>
+					</div>
+				</div>
+			</li>
+		{/each}
+	</ul>
 {/if}
 
-<!-- Caption snippets per account -->
-<section class="mb-12">
-	<h2 class="mb-1 text-sm font-semibold uppercase tracking-wide text-base-content/50">Caption snippets</h2>
-	<p class="mb-5 text-sm text-base-content/50">
-		Reusable text bits (addresses, hashtag sets, emojis, multiline blocks) team members can insert with one click.
-	</p>
-	<div class="flex flex-col gap-4">
-		{#each data.accounts as acct}
-			<div class="card bg-base-100">
-				<div class="card-body gap-4">
-					<h3 class="font-medium">{acct.label}</h3>
-
-					<!-- Existing snippets -->
-					{#if acct.snippets.length > 0}
-						<ul class="flex flex-col gap-1.5">
-							{#each acct.snippets as snippet}
-								<li class="flex items-start justify-between gap-3 rounded-box bg-base-200 px-3 py-2">
-									<div class="min-w-0">
-										<p class="text-xs font-medium">{snippet.label}</p>
-										<p class="mt-0.5 text-xs text-base-content/50 break-all">{snippet.text}</p>
-									</div>
-									<form method="POST" action="?/deleteSnippet" use:enhance class="shrink-0">
-										<input type="hidden" name="id" value={snippet.id} />
-										<button
-											type="submit"
-											class="btn btn-ghost btn-xs text-error"
-											onclick={(e) => { if (!confirm('Delete this snippet?')) e.preventDefault(); }}
-										>
-											Delete
-										</button>
-									</form>
-								</li>
-							{/each}
-						</ul>
-					{:else}
-						<p class="text-xs text-base-content/40">No snippets yet.</p>
-					{/if}
-
-					<!-- Add snippet form -->
-					<form method="POST" action="?/addSnippet" use:enhance class="flex flex-wrap items-end gap-2">
-						<input type="hidden" name="account_id" value={acct.id} />
-						<fieldset class="fieldset">
-							<legend class="fieldset-legend">Button label</legend>
-							<input
-								name="snippet_label"
-								type="text"
-								required
-								placeholder="Street address"
-								class="input input-sm w-40"
-							/>
-						</fieldset>
-						<fieldset class="fieldset flex-1 min-w-48">
-							<legend class="fieldset-legend">Text to insert (multiline ok, emojis welcome)</legend>
-							<textarea
-								name="snippet_text"
-								required
-								placeholder="123 Main St, Sydney NSW 2000"
-								rows="2"
-								class="textarea textarea-sm w-full"
-							></textarea>
-						</fieldset>
-						<button type="submit" class="btn btn-sm btn-neutral">Add</button>
-					</form>
-				</div>
+<!-- Remove confirmation modal -->
+{#if deleteTarget}
+	<dialog class="modal modal-open">
+		<div class="modal-box">
+			<h3 class="font-bold text-lg mb-1">Remove account</h3>
+			<p class="text-sm text-base-content/70 mb-1">
+				You're about to remove <strong>{deleteTarget.label}</strong>.
+			</p>
+			<p class="text-sm text-base-content/70 mb-4">
+				The account will be hidden from the app. All data (shows, posts, ticket history) is preserved and can be restored from the database if needed.
+			</p>
+			<p class="text-sm font-medium mb-2">
+				Type <span class="font-mono bg-base-200 px-1.5 py-0.5 rounded text-error">delete</span> to confirm
+			</p>
+			<input
+				type="text"
+				bind:value={confirmText}
+				placeholder="delete"
+				autocomplete="off"
+				class="input input-bordered w-full mb-4"
+			/>
+			<div class="modal-action mt-0">
+				<button type="button" class="btn btn-ghost" onclick={closeDelete}>Cancel</button>
+				<form method="POST" action="?/remove" use:enhance={() => { closeDelete(); }}>
+					<input type="hidden" name="id" value={deleteTarget.id} />
+					<input type="hidden" name="confirm" value={confirmText} />
+					<button
+						type="submit"
+						class="btn btn-error"
+						disabled={confirmText.toLowerCase().trim() !== 'delete'}
+					>
+						Remove account
+					</button>
+				</form>
 			</div>
-		{/each}
-	</div>
-</section>
-
-<!-- Tag snippets per account -->
-<section class="mb-12">
-	<h2 class="mb-1 text-sm font-semibold uppercase tracking-wide text-base-content/50">Tag snippets</h2>
-	<p class="mb-5 text-sm text-base-content/50">
-		Save Instagram usernames so team members can tag people in feed posts with one click.
-	</p>
-	<div class="flex flex-col gap-4">
-		{#each data.accounts as acct}
-			<div class="card bg-base-100">
-				<div class="card-body gap-4">
-					<h3 class="font-medium">{acct.label}</h3>
-
-					{#if acct.tagSnippets.length > 0}
-						<ul class="flex flex-col gap-1.5">
-							{#each acct.tagSnippets as tag}
-								<li class="flex items-center justify-between gap-3 rounded-box bg-base-200 px-3 py-2">
-									<div class="min-w-0">
-										<p class="text-xs font-medium">{tag.label}</p>
-										<p class="mt-0.5 text-xs text-base-content/50">@{tag.username}</p>
-									</div>
-									<form method="POST" action="?/deleteTagSnippet" use:enhance class="shrink-0">
-										<input type="hidden" name="id" value={tag.id} />
-										<button
-											type="submit"
-											class="btn btn-ghost btn-xs text-error"
-											onclick={(e) => { if (!confirm('Delete this tag?')) e.preventDefault(); }}
-										>Delete</button>
-									</form>
-								</li>
-							{/each}
-						</ul>
-					{:else}
-						<p class="text-xs text-base-content/40">No tag snippets yet.</p>
-					{/if}
-
-					<form method="POST" action="?/addTagSnippet" use:enhance class="flex flex-wrap items-end gap-2">
-						<input type="hidden" name="account_id" value={acct.id} />
-						<fieldset class="fieldset">
-							<legend class="fieldset-legend">Button label</legend>
-							<input
-								name="tag_label"
-								type="text"
-								required
-								placeholder="Photographer"
-								class="input input-sm w-36"
-							/>
-						</fieldset>
-						<fieldset class="fieldset">
-							<legend class="fieldset-legend">Instagram username</legend>
-							<input
-								name="tag_username"
-								type="text"
-								required
-								placeholder="@handle"
-								class="input input-sm w-40"
-							/>
-						</fieldset>
-						<button type="submit" class="btn btn-sm btn-neutral">Add</button>
-					</form>
-				</div>
-			</div>
-		{/each}
-	</div>
-</section>
-
-<!-- Shows (ticket tracking) per account -->
-<section class="mb-12">
-	<h2 class="mb-1 text-sm font-semibold uppercase tracking-wide text-base-content/50">Shows &amp; ticket tracking</h2>
-	<p class="mb-5 text-sm text-base-content/50">
-		Link shows to Humanitix or Eventbrite events to track ticket sales. Tickets are checked automatically based on Melbourne time — every 5 min at show time, hourly off-peak, quiet midnight–6am.
-	</p>
-	<div class="flex flex-col gap-4">
-		{#each data.accounts as acct}
-			<div class="card bg-base-100">
-				<div class="card-body gap-4">
-					<h3 class="font-medium">{acct.label}</h3>
-
-					{#if acct.shows.length > 0}
-						<ul class="flex flex-col gap-1.5">
-							{#each acct.shows as show}
-								<li class="flex items-center justify-between gap-3 rounded-box bg-base-200 px-3 py-2">
-									<div class="min-w-0 flex-1">
-										<div class="flex items-center gap-2">
-											<p class="text-xs font-medium">{show.name}</p>
-											{#if !show.isActive}
-												<span class="badge badge-xs badge-ghost">Paused</span>
-											{/if}
-										</div>
-										<p class="mt-0.5 text-xs text-base-content/40">
-											{#if show.humanitixEventId}Humanitix: <span class="font-mono">{show.humanitixEventId}</span>{/if}
-											{#if show.humanitixEventId && show.eventbriteEventId} · {/if}
-											{#if show.eventbriteEventId}Eventbrite: <span class="font-mono">{show.eventbriteEventId}</span>{/if}
-										</p>
-									</div>
-									<div class="flex items-center gap-1 shrink-0">
-										<form method="POST" action="?/toggleShow" use:enhance>
-											<input type="hidden" name="id" value={show.id} />
-											<input type="hidden" name="active" value={show.isActive ? 'true' : 'false'} />
-											<button type="submit" class="btn btn-ghost btn-xs">
-												{show.isActive ? 'Pause' : 'Resume'}
-											</button>
-										</form>
-										<form method="POST" action="?/deleteShow" use:enhance>
-											<input type="hidden" name="id" value={show.id} />
-											<button
-												type="submit"
-												class="btn btn-ghost btn-xs text-error"
-												onclick={(e) => { if (!confirm('Remove this show and all its ticket history?')) e.preventDefault(); }}
-											>Remove</button>
-										</form>
-									</div>
-								</li>
-							{/each}
-						</ul>
-					{:else}
-						<p class="text-xs text-base-content/40">No shows linked yet.</p>
-					{/if}
-
-					<form method="POST" action="?/addShow" use:enhance class="flex flex-wrap items-end gap-2">
-						<input type="hidden" name="account_id" value={acct.id} />
-						<fieldset class="fieldset">
-							<legend class="fieldset-legend">Show name</legend>
-							<input
-								name="show_name"
-								type="text"
-								required
-								placeholder="Comedy Therapy"
-								class="input input-sm w-44"
-							/>
-						</fieldset>
-						<fieldset class="fieldset">
-							<legend class="fieldset-legend">Humanitix event ID</legend>
-							<input
-								name="humanitix_event_id"
-								type="text"
-								placeholder="6a575527bd266af6e1..."
-								class="input input-sm w-52 font-mono text-xs"
-							/>
-						</fieldset>
-						<fieldset class="fieldset">
-							<legend class="fieldset-legend">Eventbrite event ID</legend>
-							<input
-								name="eventbrite_event_id"
-								type="text"
-								placeholder="12345678901"
-								class="input input-sm w-40 font-mono text-xs"
-							/>
-						</fieldset>
-						<button type="submit" class="btn btn-sm btn-neutral">Add show</button>
-					</form>
-				</div>
-			</div>
-		{/each}
-	</div>
-</section>
+		</div>
+		<div class="modal-backdrop" role="button" tabindex="-1" onclick={closeDelete} onkeydown={() => {}}></div>
+	</dialog>
+{/if}

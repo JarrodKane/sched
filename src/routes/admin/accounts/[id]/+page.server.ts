@@ -1,0 +1,95 @@
+import { error, fail } from '@sveltejs/kit';
+import { db } from '$lib/server/db';
+import { users, socialAccounts, shows } from '$lib/server/db/schema';
+import { eq, asc, isNull } from 'drizzle-orm';
+import type { Actions, PageServerLoad } from './$types';
+
+async function requireAdmin(locals: App.Locals) {
+	const { user } = await locals.safeGetSession();
+	if (!user) return null;
+	const [profile] = await db.select().from(users).where(eq(users.id, user.id)).limit(1);
+	return profile?.isAdmin ? profile : null;
+}
+
+export const load: PageServerLoad = async ({ params, locals }) => {
+	if (!await requireAdmin(locals)) error(403, 'Access denied');
+
+	const [account] = await db
+		.select()
+		.from(socialAccounts)
+		.where(eq(socialAccounts.id, params.id) /* soft-deleted accounts still accessible to admin */)
+		.limit(1);
+	if (!account) error(404, 'Account not found');
+
+	const accountShows = await db
+		.select()
+		.from(shows)
+		.where(eq(shows.accountId, params.id))
+		.orderBy(asc(shows.createdAt));
+
+	return { account, shows: accountShows };
+};
+
+export const actions: Actions = {
+	addShow: async ({ request, locals, params }) => {
+		if (!await requireAdmin(locals)) return fail(403, { showError: 'Access denied' });
+
+		const form = await request.formData();
+		const name = (form.get('show_name') as string)?.trim();
+		const humanitixEventId = (form.get('humanitix_event_id') as string)?.trim() || null;
+		const eventbriteEventId = (form.get('eventbrite_event_id') as string)?.trim() || null;
+		const capacityRaw = (form.get('capacity') as string)?.trim();
+		const capacity = capacityRaw ? parseInt(capacityRaw, 10) || null : null;
+
+		if (!name) return fail(400, { showError: 'Show name is required.' });
+		if (!humanitixEventId && !eventbriteEventId) {
+			return fail(400, { showError: 'At least one ticket platform ID is required.' });
+		}
+
+		await db.insert(shows).values({ accountId: params.id, name, humanitixEventId, eventbriteEventId, capacity });
+		return { showAdded: true };
+	},
+
+	updateShow: async ({ request, locals }) => {
+		if (!await requireAdmin(locals)) return fail(403, { showError: 'Access denied' });
+
+		const form = await request.formData();
+		const id = (form.get('id') as string)?.trim();
+		const name = (form.get('show_name') as string)?.trim();
+		const humanitixEventId = (form.get('humanitix_event_id') as string)?.trim() || null;
+		const eventbriteEventId = (form.get('eventbrite_event_id') as string)?.trim() || null;
+		const capacityRaw = (form.get('capacity') as string)?.trim();
+		const capacity = capacityRaw ? parseInt(capacityRaw, 10) || null : null;
+
+		if (!id || !name) return fail(400, { showError: 'Show name is required.' });
+
+		await db.update(shows)
+			.set({ name, humanitixEventId, eventbriteEventId, capacity })
+			.where(eq(shows.id, id));
+
+		return { showUpdated: true };
+	},
+
+	deleteShow: async ({ request, locals }) => {
+		if (!await requireAdmin(locals)) return fail(403, { showError: 'Access denied' });
+
+		const form = await request.formData();
+		const id = (form.get('id') as string)?.trim();
+		if (!id) return fail(400, { showError: 'Missing show ID.' });
+
+		await db.delete(shows).where(eq(shows.id, id));
+		return { showDeleted: true };
+	},
+
+	toggleShow: async ({ request, locals }) => {
+		if (!await requireAdmin(locals)) return fail(403, { showError: 'Access denied' });
+
+		const form = await request.formData();
+		const id = (form.get('id') as string)?.trim();
+		const active = form.get('active') === 'true';
+		if (!id) return fail(400, { showError: 'Missing show ID.' });
+
+		await db.update(shows).set({ isActive: !active }).where(eq(shows.id, id));
+		return { showToggled: true };
+	}
+};

@@ -3,6 +3,32 @@
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
+
+	// Per-user: which accounts are checked (so asset checkboxes can be shown/hidden)
+	let checkedAccounts = $state<Record<string, Set<string>>>({});
+
+	$effect(() => {
+		const initial: Record<string, Set<string>> = {};
+		for (const user of data.users) {
+			initial[user.id] = new Set(user.access.map((a) => a.accountId));
+		}
+		checkedAccounts = initial;
+	});
+
+	function isChecked(userId: string, accountId: string) {
+		return checkedAccounts[userId]?.has(accountId) ?? false;
+	}
+
+	function toggleAccount(userId: string, accountId: string, checked: boolean) {
+		const set = new Set(checkedAccounts[userId] ?? []);
+		if (checked) set.add(accountId);
+		else set.delete(accountId);
+		checkedAccounts = { ...checkedAccounts, [userId]: set };
+	}
+
+	function getAsset(userId: string, accountId: string, asset: 'canAccessSocial' | 'canAccessTickets' | 'canAccessLineups') {
+		return data.users.find((u) => u.id === userId)?.access.find((a) => a.accountId === accountId)?.[asset] ?? (asset === 'canAccessLineups' ? false : true);
+	}
 </script>
 
 <svelte:head><title>Users — IG Scheduler Admin</title></svelte:head>
@@ -48,22 +74,59 @@
 						</form>
 					</div>
 
-					<!-- Account access -->
+					<!-- Account access with per-asset permissions -->
 					<form method="POST" action="?/setAccess" use:enhance class="flex flex-col gap-3">
 						<input type="hidden" name="user_id" value={user.id} />
 						<p class="text-xs font-medium text-base-content/50">Account access:</p>
-						<div class="flex flex-wrap gap-x-4 gap-y-2">
+						<div class="flex flex-col gap-2">
 							{#each data.accounts as acct}
-								<label class="flex items-center gap-2 text-sm cursor-pointer">
-									<input
-										type="checkbox"
-										name="account_ids"
-										value={acct.id}
-										checked={user.accountIds.includes(acct.id)}
-										class="checkbox checkbox-sm"
-									/>
-									{acct.label}
-								</label>
+								{@const checked = isChecked(user.id, acct.id)}
+								<div class="rounded-box bg-base-200 px-3 py-2">
+									<label class="flex items-center gap-2 cursor-pointer">
+										<input
+											type="checkbox"
+											name="account_ids"
+											value={acct.id}
+											checked={checked}
+											onchange={(e) => toggleAccount(user.id, acct.id, (e.target as HTMLInputElement).checked)}
+											class="checkbox checkbox-sm"
+										/>
+										<span class="text-sm font-medium">{acct.label}</span>
+									</label>
+
+									{#if checked}
+										<div class="mt-2 ml-6 flex flex-wrap gap-x-4 gap-y-1">
+											<label class="flex items-center gap-1.5 text-xs cursor-pointer">
+												<input
+													type="checkbox"
+													name="social_{acct.id}"
+													checked={getAsset(user.id, acct.id, 'canAccessSocial')}
+													class="checkbox checkbox-xs"
+												/>
+												Social
+											</label>
+											<label class="flex items-center gap-1.5 text-xs cursor-pointer">
+												<input
+													type="checkbox"
+													name="tickets_{acct.id}"
+													checked={getAsset(user.id, acct.id, 'canAccessTickets')}
+													class="checkbox checkbox-xs"
+												/>
+												Tickets
+											</label>
+											<label class="flex items-center gap-1.5 text-xs cursor-pointer text-base-content/40">
+												<input
+													type="checkbox"
+													name="lineups_{acct.id}"
+													checked={getAsset(user.id, acct.id, 'canAccessLineups')}
+													class="checkbox checkbox-xs"
+													disabled
+												/>
+												Lineups <span class="badge badge-xs badge-ghost">v3</span>
+											</label>
+										</div>
+									{/if}
+								</div>
 							{/each}
 						</div>
 						<div>

@@ -17,7 +17,8 @@ export const socialAccounts = pgTable('social_accounts', {
 	tokenExpiresAt: timestamp('token_expires_at', { withTimezone: true }),
 	locationId: text('location_id'),
 	locationName: text('location_name'),
-	aiInstructions: text('ai_instructions')
+	aiInstructions: text('ai_instructions'),
+	deletedAt: timestamp('deleted_at', { withTimezone: true })
 });
 
 export const userAccountAccess = pgTable(
@@ -28,7 +29,10 @@ export const userAccountAccess = pgTable(
 			.references(() => users.id, { onDelete: 'cascade' }),
 		accountId: uuid('account_id')
 			.notNull()
-			.references(() => socialAccounts.id, { onDelete: 'cascade' })
+			.references(() => socialAccounts.id, { onDelete: 'cascade' }),
+		canAccessSocial: boolean('can_access_social').notNull().default(true),
+		canAccessTickets: boolean('can_access_tickets').notNull().default(true),
+		canAccessLineups: boolean('can_access_lineups').notNull().default(false)
 	},
 	(t) => [primaryKey({ columns: [t.userId, t.accountId] })]
 );
@@ -89,6 +93,7 @@ export const shows = pgTable('shows', {
 	humanitixEventId: text('humanitix_event_id'),
 	eventbriteEventId: text('eventbrite_event_id'),
 	isActive: boolean('is_active').notNull().default(true),
+	capacity: integer('capacity'),
 	aiInstructions: text('ai_instructions'),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });

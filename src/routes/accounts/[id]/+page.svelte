@@ -402,6 +402,39 @@
 
 <svelte:head><title>{data.account.label} — IG Scheduler</title></svelte:head>
 
+{#if !data.canAccessSocial}
+	<!-- Overview for users without Instagram access -->
+	<div class="flex flex-col gap-4">
+		<div class="grid gap-4 sm:grid-cols-2">
+			<!-- Upcoming posts summary -->
+			<div class="card bg-base-100">
+				<div class="card-body gap-1">
+					<p class="text-xs font-medium uppercase tracking-wide text-base-content/40">Instagram posts planned</p>
+					<p class="text-3xl font-bold">{data.queue.length}</p>
+					{#if data.queue.length > 0}
+						<p class="text-sm text-base-content/60 mt-1">
+							Next: {new Date(data.queue[0].scheduledFor).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+						</p>
+					{:else}
+						<p class="text-sm text-base-content/40 mt-1">Nothing scheduled</p>
+					{/if}
+				</div>
+			</div>
+
+			{#if data.canAccessTickets}
+				<!-- Tickets shortcut -->
+				<a href="/accounts/{data.account.id}/tickets" class="card bg-base-100 hover:bg-base-200 transition-colors group">
+					<div class="card-body gap-1">
+						<p class="text-xs font-medium uppercase tracking-wide text-base-content/40">Tickets</p>
+						<p class="text-sm font-medium text-base-content/80 mt-1">View upcoming shows &amp; ticket sales</p>
+						<span class="text-xs text-primary mt-1 group-hover:underline">Open tickets →</span>
+					</div>
+				</a>
+			{/if}
+		</div>
+	</div>
+{:else}
+
 <!-- Crop modal -->
 <CropModal
 	bind:this={cropModal}
@@ -1198,3 +1231,5 @@
 		</div>
 	</section>
 </div>
+
+{/if}
