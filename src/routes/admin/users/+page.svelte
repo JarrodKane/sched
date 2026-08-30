@@ -4,30 +4,52 @@
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
-	// Per-user: which accounts are checked (so asset checkboxes can be shown/hidden)
+	// Per-user: which accounts are checked (controls showing/hiding asset sub-options)
 	let checkedAccounts = $state<Record<string, Set<string>>>({});
 
+	// Per user+account: the three asset toggles, tracked in $state so bind:checked is stable
+	type Assets = { social: boolean; tickets: boolean; lineups: boolean };
+	let assetState = $state<Record<string, Assets>>({});
+
+	function assetKey(userId: string, accountId: string) {
+		return `${userId}__${accountId}`;
+	}
+
 	$effect(() => {
-		const initial: Record<string, Set<string>> = {};
+		const newChecked: Record<string, Set<string>> = {};
+		const newAssets: Record<string, Assets> = {};
+
 		for (const user of data.users) {
-			initial[user.id] = new Set(user.access.map((a) => a.accountId));
+			newChecked[user.id] = new Set(user.access.map((a) => a.accountId));
+			for (const row of user.access) {
+				newAssets[assetKey(user.id, row.accountId)] = {
+					social: row.canAccessSocial,
+					tickets: row.canAccessTickets,
+					lineups: row.canAccessLineups
+				};
+			}
 		}
-		checkedAccounts = initial;
+
+		checkedAccounts = newChecked;
+		assetState = newAssets;
 	});
 
 	function isChecked(userId: string, accountId: string) {
 		return checkedAccounts[userId]?.has(accountId) ?? false;
 	}
 
-	function toggleAccount(userId: string, accountId: string, checked: boolean) {
+	function toggleAccount(userId: string, accountId: string, on: boolean) {
 		const set = new Set(checkedAccounts[userId] ?? []);
-		if (checked) set.add(accountId);
-		else set.delete(accountId);
+		if (on) {
+			set.add(accountId);
+			const key = assetKey(userId, accountId);
+			if (!assetState[key]) {
+				assetState[key] = { social: true, tickets: true, lineups: false };
+			}
+		} else {
+			set.delete(accountId);
+		}
 		checkedAccounts = { ...checkedAccounts, [userId]: set };
-	}
-
-	function getAsset(userId: string, accountId: string, asset: 'canAccessSocial' | 'canAccessTickets' | 'canAccessLineups') {
-		return data.users.find((u) => u.id === userId)?.access.find((a) => a.accountId === accountId)?.[asset] ?? (asset === 'canAccessLineups' ? false : true);
 	}
 </script>
 
@@ -95,12 +117,13 @@
 									</label>
 
 									{#if checked}
+										{@const key = assetKey(user.id, acct.id)}
 										<div class="mt-2 ml-6 flex flex-wrap gap-x-4 gap-y-1">
 											<label class="flex items-center gap-1.5 text-xs cursor-pointer">
 												<input
 													type="checkbox"
 													name="social_{acct.id}"
-													checked={getAsset(user.id, acct.id, 'canAccessSocial')}
+													bind:checked={assetState[key].social}
 													class="checkbox checkbox-xs"
 												/>
 												Social
@@ -109,7 +132,7 @@
 												<input
 													type="checkbox"
 													name="tickets_{acct.id}"
-													checked={getAsset(user.id, acct.id, 'canAccessTickets')}
+													bind:checked={assetState[key].tickets}
 													class="checkbox checkbox-xs"
 												/>
 												Tickets
@@ -118,7 +141,7 @@
 												<input
 													type="checkbox"
 													name="lineups_{acct.id}"
-													checked={getAsset(user.id, acct.id, 'canAccessLineups')}
+													bind:checked={assetState[key].lineups}
 													class="checkbox checkbox-xs"
 													disabled
 												/>

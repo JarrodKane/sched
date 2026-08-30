@@ -88,7 +88,7 @@
 			ontouchend={onTouchEnd}
 		>
 			{#if postType === 'story'}
-				<div class="overflow-hidden bg-black w-full" style="aspect-ratio: 9/16; max-height: 65dvh">
+				<div class="overflow-hidden bg-black mx-auto" style="aspect-ratio: 9/16; width: min(100%, calc(65dvh * 9 / 16))">
 					<img src={imageUrl} alt="" class="w-full h-full object-cover" />
 				</div>
 			{:else}

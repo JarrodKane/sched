@@ -91,9 +91,9 @@
 	<ul class="flex flex-col gap-2 mb-10">
 		{#each data.accounts as acct}
 			<li class="card bg-base-100">
-				<div class="card-body py-3 px-4 flex-row items-center gap-4">
+				<div class="card-body py-3 px-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
 					<div class="flex-1 min-w-0">
-						<p class="font-medium">{acct.label}</p>
+						<p class="font-medium truncate">{acct.label}</p>
 						<div class="flex items-center gap-2 mt-0.5">
 							{#if acct.tokenExpiresAt}
 								{#if isExpired(acct.tokenExpiresAt)}

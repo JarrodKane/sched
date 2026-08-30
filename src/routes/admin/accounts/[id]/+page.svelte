@@ -10,15 +10,15 @@
 <svelte:head><title>{data.account.label} — Admin</title></svelte:head>
 
 <!-- Header -->
-<div class="mb-6 flex items-start justify-between gap-3">
-	<div>
+<div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+	<div class="min-w-0">
 		<a href="/admin/accounts" class="text-sm text-base-content/40 hover:text-base-content transition-colors">
 			← Accounts
 		</a>
 		<h1 class="mt-1 text-xl font-semibold">{data.account.label}</h1>
-		<p class="text-xs text-base-content/40 font-mono mt-0.5">{data.account.igBusinessId}</p>
+		<p class="text-xs text-base-content/40 font-mono mt-0.5 break-all">{data.account.igBusinessId}</p>
 	</div>
-	<div class="flex items-center gap-2 shrink-0 mt-1">
+	<div class="flex items-center gap-2 shrink-0">
 		<a href="/accounts/{data.account.id}/settings" class="btn btn-sm btn-soft btn-neutral">
 			Snippets &amp; settings
 		</a>
@@ -48,7 +48,7 @@
 		{#each data.shows as show}
 			<div class="card bg-base-100">
 				<div class="card-body py-3 px-4 gap-3">
-					<div class="flex items-center justify-between gap-3">
+					<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
 						<div class="min-w-0">
 							<div class="flex items-center gap-2">
 								<p class="font-medium text-sm">{show.name}</p>
@@ -57,12 +57,12 @@
 								{/if}
 							</div>
 							{#if editingShowId !== show.id}
-								<div class="flex flex-wrap gap-x-3 mt-0.5">
+								<div class="flex flex-col gap-0.5 mt-0.5 sm:flex-row sm:flex-wrap sm:gap-x-3">
 									{#if show.humanitixEventId}
-										<p class="text-xs text-base-content/40 font-mono">Humanitix: {show.humanitixEventId}</p>
+										<p class="text-xs text-base-content/40 font-mono break-all">Humanitix: {show.humanitixEventId}</p>
 									{/if}
 									{#if show.eventbriteEventId}
-										<p class="text-xs text-base-content/40 font-mono">Eventbrite: {show.eventbriteEventId}</p>
+										<p class="text-xs text-base-content/40 font-mono break-all">Eventbrite: {show.eventbriteEventId}</p>
 									{/if}
 									{#if !show.humanitixEventId && !show.eventbriteEventId}
 										<p class="text-xs text-warning/70">No platform IDs set</p>
