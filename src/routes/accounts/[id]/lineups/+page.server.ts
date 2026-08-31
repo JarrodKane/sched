@@ -48,7 +48,7 @@ export const load: PageServerLoad = async ({ params, url, parent }) => {
 
 	// Run shows query and lineups+counts query in parallel (shows don't change often)
 	const [accountShows, weekLineupsRaw] = await Promise.all([
-		db.select().from(shows).where(eq(shows.accountId, params.id)).orderBy(asc(shows.name)),
+		db.select().from(shows).where(eq(shows.accountId, params.id)).orderBy(sql`coalesce(${shows.scheduleDayOfWeek}, 7)`, asc(shows.name)),
 		// Lineups with active entry counts (excludes cancelled) via LEFT JOIN + GROUP BY
 		db
 			.select({

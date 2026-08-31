@@ -4,35 +4,30 @@
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
-	// Per-user: which accounts are checked (controls showing/hiding asset sub-options)
-	let checkedAccounts = $state<Record<string, Set<string>>>({});
-
-	// Per user+account: the three asset toggles, tracked in $state so bind:checked is stable
 	type Assets = { social: boolean; tickets: boolean; lineups: boolean };
-	let assetState = $state<Record<string, Assets>>({});
 
 	function assetKey(userId: string, accountId: string) {
 		return `${userId}__${accountId}`;
 	}
 
-	$effect(() => {
-		const newChecked: Record<string, Set<string>> = {};
-		const newAssets: Record<string, Assets> = {};
+	function buildChecked() {
+		const r: Record<string, Set<string>> = {};
+		for (const user of data.users) r[user.id] = new Set(user.access.map((a) => a.accountId));
+		return r;
+	}
 
-		for (const user of data.users) {
-			newChecked[user.id] = new Set(user.access.map((a) => a.accountId));
-			for (const row of user.access) {
-				newAssets[assetKey(user.id, row.accountId)] = {
-					social: row.canAccessSocial,
-					tickets: row.canAccessTickets,
-					lineups: row.canAccessLineups
-				};
-			}
-		}
+	function buildAssets() {
+		const r: Record<string, Assets> = {};
+		for (const user of data.users)
+			for (const row of user.access)
+				r[assetKey(user.id, row.accountId)] = { social: row.canAccessSocial, tickets: row.canAccessTickets, lineups: row.canAccessLineups };
+		return r;
+	}
 
-		checkedAccounts = newChecked;
-		assetState = newAssets;
-	});
+	// Per-user: which accounts are checked (controls showing/hiding asset sub-options)
+	let checkedAccounts = $state<Record<string, Set<string>>>(buildChecked());
+	// Per user+account: the three asset toggles
+	let assetState = $state<Record<string, Assets>>(buildAssets());
 
 	function isChecked(userId: string, accountId: string) {
 		return checkedAccounts[userId]?.has(accountId) ?? false;
@@ -97,7 +92,11 @@
 					</div>
 
 					<!-- Account access with per-asset permissions -->
-					<form method="POST" action="?/setAccess" use:enhance class="flex flex-col gap-3">
+					<form method="POST" action="?/setAccess" use:enhance={() => async ({ update }) => {
+						await update({ reset: false });
+						checkedAccounts = buildChecked();
+						assetState = buildAssets();
+					}} class="flex flex-col gap-3">
 						<input type="hidden" name="user_id" value={user.id} />
 						<p class="text-xs font-medium text-base-content/50">Account access:</p>
 						<div class="flex flex-col gap-2">

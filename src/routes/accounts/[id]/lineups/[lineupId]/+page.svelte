@@ -9,7 +9,7 @@
 	const STATUS_CYCLE = ['to_contact', 'booked', 'cancelled'] as const;
 
 	const STATUS_LABELS: Record<string, string> = {
-		to_contact: 'To Contact',
+		to_contact: 'Contact',
 		booked: 'Booked',
 		cancelled: 'Cancelled'
 	};
@@ -435,7 +435,7 @@
 							<input type="hidden" name="person_id" value={selectedPerson.id} />
 						{/if}
 
-						{#if searchResults.length > 0 || (searchQuery.trim().length >= 2 && !selectedPerson)}
+						{#if !showCreateForm && (searchResults.length > 0 || (searchQuery.trim().length >= 2 && !selectedPerson))}
 							<ul class="absolute z-10 top-full left-0 right-0 bg-base-100 border border-base-300 rounded-xl shadow-lg mt-1 overflow-hidden">
 								{#each searchResults as p}
 									<li>

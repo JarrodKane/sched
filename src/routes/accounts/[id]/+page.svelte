@@ -495,7 +495,7 @@
 					{#if rescheduling}<span class="loading loading-spinner loading-sm"></span>{/if}
 					{rescheduling ? 'Saving…' : 'Reschedule'}
 				</button>
-				<button type="button" onclick={() => rescheduleDialog?.close()} class="btn btn-ghost flex-1">Cancel</button>
+				<button type="button" onclick={() => rescheduleDialog?.close()} class="btn btn-outline flex-1">Cancel</button>
 			</div>
 		</form>
 	</div>
@@ -507,7 +507,7 @@
 	<div class="modal-box max-w-xl w-full overflow-hidden">
 		<div class="flex items-center justify-between mb-4">
 			<h3 class="font-semibold">Choose from library</h3>
-			<form method="dialog"><button class="btn btn-ghost btn-sm btn-circle">✕</button></form>
+			<form method="dialog"><button class="btn btn-soft btn-sm btn-circle">✕</button></form>
 		</div>
 		{#if data.priorUploads.length === 0}
 			<p class="text-sm text-base-content/40">No images in library yet.</p>
@@ -517,7 +517,8 @@
 					<button
 						type="button"
 						onclick={() => pickFromGallery(img.url)}
-						class="group relative aspect-square overflow-hidden rounded-box border-2 transition min-w-0
+						class="group relative overflow-hidden rounded-box border-2 transition min-w-0
+							{!addingToCarousel && postType === 'story' ? 'aspect-9/16' : 'aspect-square'}
 							{(addingToCarousel ? carouselUrls.includes(img.url) : uploadedUrl === img.url) ? 'border-primary' : 'border-transparent hover:border-base-300'}"
 					>
 						<img src={img.url} alt="" class="h-full w-full object-cover transition group-hover:scale-105" />
@@ -591,7 +592,7 @@
 		<h3 class="font-semibold mb-3">Caption</h3>
 		<p class="text-sm text-base-content/80 whitespace-pre-line leading-relaxed">{viewCaptionText}</p>
 		<div class="modal-action mt-4 gap-2">
-			<button class="btn btn-ghost btn-sm" onclick={copyViewCaption}>
+			<button class="btn btn-outline btn-sm" onclick={copyViewCaption}>
 				{viewCaptionCopied ? 'Copied!' : 'Copy caption'}
 			</button>
 			<button class="btn btn-sm" onclick={() => viewCaptionDialog?.close()}>Close</button>
@@ -705,14 +706,14 @@
 													type="button"
 													onclick={() => moveCarouselItem(i, -1)}
 													disabled={i === 0}
-													class="btn btn-xs btn-circle btn-ghost bg-base-100/90 shadow-sm disabled:opacity-20 h-5 w-5 min-h-0 p-0 text-xs"
+													class="btn btn-xs btn-circle btn-soft shadow-sm disabled:opacity-20 h-5 w-5 min-h-0 p-0 text-xs"
 													aria-label="Move left"
 												>‹</button>
 												<button
 													type="button"
 													onclick={() => moveCarouselItem(i, 1)}
 													disabled={i === carouselUrls.length - 1}
-													class="btn btn-xs btn-circle btn-ghost bg-base-100/90 shadow-sm disabled:opacity-20 h-5 w-5 min-h-0 p-0 text-xs"
+													class="btn btn-xs btn-circle btn-soft shadow-sm disabled:opacity-20 h-5 w-5 min-h-0 p-0 text-xs"
 													aria-label="Move right"
 												>›</button>
 											</div>
@@ -744,7 +745,7 @@
 							<button
 								type="button"
 								onclick={openFormPreview}
-								class="btn btn-ghost btn-xs self-start"
+								class="btn btn-outline btn-xs self-start"
 							>Preview carousel</button>
 						{/if}
 
@@ -781,17 +782,17 @@
 										<button
 											type="button"
 											onclick={openFormPreview}
-											class="btn btn-ghost btn-xs"
+											class="btn btn-soft btn-xs"
 										>Preview</button>
 										<button
 											type="button"
 											onclick={editCurrentImage}
-											class="btn btn-ghost btn-xs"
+											class="btn btn-soft btn-xs"
 										>Edit image</button>
 										<button
 											type="button"
 											onclick={() => textOverlayModal?.openWithUrl(uploadedUrl)}
-											class="btn btn-ghost btn-xs"
+											class="btn btn-soft btn-xs"
 										>Add text</button>
 									</div>
 								</div>
@@ -823,7 +824,7 @@
 									<button
 										type="button"
 										onclick={() => { addingToCarousel = false; galleryDialog?.showModal(); }}
-										class="btn btn-ghost btn-sm gap-1 text-base-content/60"
+										class="btn btn-outline btn-sm gap-1"
 									>
 										<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 											<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
@@ -862,14 +863,14 @@
 										<button
 											type="button"
 											onclick={() => captionStyle = 'event'}
-											class="btn btn-xs join-item {captionStyle === 'event' ? 'btn-neutral' : 'btn-ghost border border-base-300'}"
+											class="btn btn-xs join-item {captionStyle === 'event' ? 'btn-neutral' : 'btn-outline'}"
 										>Event post</button>
 									</div>
 									<div class="tooltip tooltip-bottom" data-tip="Posting about a past event — polishes your caption without restructuring it into a promotion">
 										<button
 											type="button"
 											onclick={() => captionStyle = 'recap'}
-											class="btn btn-xs join-item {captionStyle === 'recap' ? 'btn-neutral' : 'btn-ghost border border-base-300'}"
+											class="btn btn-xs join-item {captionStyle === 'recap' ? 'btn-neutral' : 'btn-outline'}"
 										>Recap</button>
 									</div>
 								</div>
@@ -877,7 +878,7 @@
 									type="button"
 									onclick={generateCaption}
 									disabled={generatingCaption}
-									class="btn btn-xs btn-ghost border border-base-300 gap-1"
+									class="btn btn-xs btn-outline gap-1"
 								>
 									{#if generatingCaption}
 										<span class="loading loading-spinner loading-xs"></span>
@@ -890,7 +891,7 @@
 									<button
 										type="button"
 										onclick={undoCaption}
-										class="btn btn-xs btn-ghost border border-base-300 gap-1"
+										class="btn btn-xs btn-outline gap-1"
 										title="Undo to previous caption"
 									>
 										<svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
@@ -911,7 +912,7 @@
 												type="button"
 												onclick={() => insertSnippet(snippet.text)}
 												title={snippet.text}
-												class="btn btn-ghost btn-xs rounded-full border border-base-300"
+												class="btn btn-outline btn-xs rounded-full"
 											>
 												{snippet.label}
 											</button>
@@ -996,7 +997,7 @@
 									autocorrect="off"
 									autocapitalize="off"
 								/>
-								<button type="button" onclick={addCustomTag} class="btn btn-ghost btn-sm">Add</button>
+								<button type="button" onclick={addCustomTag} class="btn btn-outline btn-sm">Add</button>
 							</div>
 						</div>
 						{#if postType === 'carousel'}

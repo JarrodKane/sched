@@ -319,7 +319,7 @@
 		<div class="flex items-center justify-between">
 			<h3 class="text-base font-semibold">Adjust image</h3>
 			<form method="dialog">
-				<button class="btn btn-ghost btn-sm btn-square" aria-label="Close" disabled={cropUploading}>
+				<button class="btn btn-soft btn-sm btn-square" aria-label="Close" disabled={cropUploading}>
 					<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
 				</button>
 			</form>
@@ -333,12 +333,12 @@
 					<button
 						type="button"
 						onclick={() => (cropType = 'feed')}
-						class="btn join-item btn-xs {cropType === 'feed' ? 'btn-primary' : 'btn-ghost'}"
+						class="btn join-item btn-xs {cropType === 'feed' ? 'btn-primary' : 'btn-outline'}"
 					>Feed post</button>
 					<button
 						type="button"
 						onclick={() => (cropType = 'story')}
-						class="btn join-item btn-xs {cropType === 'story' ? 'btn-primary' : 'btn-ghost'}"
+						class="btn join-item btn-xs {cropType === 'story' ? 'btn-primary' : 'btn-outline'}"
 					>Story</button>
 				</div>
 			</div>
@@ -350,7 +350,7 @@
 						<button
 							type="button"
 							onclick={() => (cropRatio = r.value)}
-							class="btn join-item btn-xs {cropRatio === r.value ? 'btn-primary' : 'btn-ghost'}"
+							class="btn join-item btn-xs {cropRatio === r.value ? 'btn-primary' : 'btn-outline'}"
 						>{r.label}</button>
 					{/each}
 				</div>
@@ -418,18 +418,18 @@
 				<button
 					type="button"
 					onclick={() => cropperInstance?.zoom(-0.1)}
-					class="btn btn-ghost btn-xs btn-square font-bold text-base"
+					class="btn btn-soft btn-xs btn-square font-bold text-base"
 					aria-label="Zoom out"
 				>−</button>
 				<button
 					type="button"
 					onclick={() => cropperInstance?.zoom(0.1)}
-					class="btn btn-ghost btn-xs btn-square font-bold text-base"
+					class="btn btn-soft btn-xs btn-square font-bold text-base"
 					aria-label="Zoom in"
 				>+</button>
-				<button type="button" onclick={fillFrame} class="btn btn-ghost btn-xs" title="Fill the frame — crops edges">Fill</button>
-				<button type="button" onclick={fitInFrame} class="btn btn-ghost btn-xs" title="Fit whole image in frame — uses background to fill gaps">Fit</button>
-				<button type="button" onclick={() => cropperInstance?.reset()} class="btn btn-ghost btn-xs">Reset</button>
+				<button type="button" onclick={fillFrame} class="btn btn-outline btn-xs" title="Fill the frame — crops edges">Fill</button>
+				<button type="button" onclick={fitInFrame} class="btn btn-outline btn-xs" title="Fit whole image in frame — uses background to fill gaps">Fit</button>
+				<button type="button" onclick={() => cropperInstance?.reset()} class="btn btn-outline btn-xs">Reset</button>
 			</div>
 		</div>
 
@@ -443,12 +443,12 @@
 					<button
 						type="button"
 						onclick={() => (bgType = 'blur')}
-						class="btn join-item btn-xs {bgType === 'blur' ? 'btn-primary' : 'btn-ghost'}"
+						class="btn join-item btn-xs {bgType === 'blur' ? 'btn-primary' : 'btn-outline'}"
 					>Blurred photo</button>
 					<button
 						type="button"
 						onclick={() => (bgType = 'color')}
-						class="btn join-item btn-xs {bgType === 'color' ? 'btn-primary' : 'btn-ghost'}"
+						class="btn join-item btn-xs {bgType === 'color' ? 'btn-primary' : 'btn-outline'}"
 					>Solid color</button>
 				</div>
 				{#if bgType === 'color'}
@@ -466,7 +466,7 @@
 					type="button"
 					onclick={togglePreview}
 					disabled={!cropObjectUrl || (previewGenerating && !showBgPreview) || cropUploading}
-					class="btn btn-xs ml-auto {showBgPreview ? 'btn-neutral btn-soft' : 'btn-ghost'} gap-1"
+					class="btn btn-xs ml-auto {showBgPreview ? 'btn-neutral btn-soft' : 'btn-outline'} gap-1"
 				>
 					{#if previewGenerating && !showBgPreview}
 						<span class="loading loading-spinner loading-xs"></span>
@@ -498,11 +498,11 @@
 						type="button"
 						onclick={() => doCrop(true)}
 						disabled={cropUploading}
-						class="btn btn-ghost btn-sm flex-1 text-xs"
+						class="btn btn-outline btn-sm flex-1 text-xs"
 					>Skip — use original</button>
 				{/if}
 				<form method="dialog" class={isEditingExisting ? 'flex-1' : 'flex-1'}>
-					<button type="submit" disabled={cropUploading} class="btn btn-ghost btn-sm w-full text-xs">
+					<button type="submit" disabled={cropUploading} class="btn btn-outline btn-sm w-full text-xs">
 						Cancel
 					</button>
 				</form>

@@ -23,7 +23,7 @@
 	<a
 		href="{base}/settings"
 		title="Account settings"
-		class="btn btn-ghost btn-sm btn-square mt-2 {isTab(`${base}/settings`) ? 'text-base-content' : 'text-base-content/30 hover:text-base-content/70'}"
+		class="btn btn-soft btn-sm btn-square mt-2 {isTab(`${base}/settings`) ? 'text-base-content' : 'text-base-content/30 hover:text-base-content/70'}"
 	>
 		<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 			<circle cx="12" cy="12" r="3"/>

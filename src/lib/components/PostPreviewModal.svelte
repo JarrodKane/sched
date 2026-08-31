@@ -74,8 +74,8 @@
 				{/if}
 				{#if showTypeToggle}
 					<div class="join">
-						<button type="button" onclick={() => (postType = 'feed')} class="btn join-item btn-xs {postType === 'feed' ? 'btn-primary' : 'btn-ghost'}">Feed</button>
-						<button type="button" onclick={() => (postType = 'story')} class="btn join-item btn-xs {postType === 'story' ? 'btn-primary' : 'btn-ghost'}">Story</button>
+						<button type="button" onclick={() => (postType = 'feed')} class="btn join-item btn-xs {postType === 'feed' ? 'btn-primary' : 'btn-outline'}">Feed</button>
+						<button type="button" onclick={() => (postType = 'story')} class="btn join-item btn-xs {postType === 'story' ? 'btn-primary' : 'btn-outline'}">Story</button>
 					</div>
 				{/if}
 			</div>
