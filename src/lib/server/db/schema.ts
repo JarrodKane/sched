@@ -95,6 +95,46 @@ export const shows = pgTable('shows', {
 	isActive: boolean('is_active').notNull().default(true),
 	capacity: integer('capacity'),
 	aiInstructions: text('ai_instructions'),
+	// Lineup scheduling
+	scheduleType: text('schedule_type'), // 'weekly' | 'fortnightly' | 'monthly' | 'one_off' | null
+	scheduleDayOfWeek: integer('schedule_day_of_week'), // 0=Sun … 6=Sat; null for one_off/monthly
+	actsPerShow: integer('acts_per_show'), // target act count, drives over-capacity warning
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+// Global talent directory
+export const people = pgTable('people', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	name: text('name').notNull(),
+	instagram: text('instagram'), // handle or full URL
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+// One lineup per show per date
+export const lineups = pgTable('lineups', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	showId: uuid('show_id')
+		.notNull()
+		.references(() => shows.id, { onDelete: 'cascade' }),
+	showDate: text('show_date').notNull(), // YYYY-MM-DD (Melbourne time)
+	notes: text('notes'),
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+}, (t) => [
+	uniqueIndex('uq_lineups_show_date').on(t.showId, t.showDate)
+]);
+
+// Individual act slots within a lineup
+export const lineupEntries = pgTable('lineup_entries', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	lineupId: uuid('lineup_id')
+		.notNull()
+		.references(() => lineups.id, { onDelete: 'cascade' }),
+	personId: uuid('person_id').references(() => people.id, { onDelete: 'set null' }),
+	name: text('name').notNull(), // copied from person or typed freehand
+	role: text('role').notNull().default('act'), // 'act' | 'headline' | 'mc' | 'support' | 'host'
+	status: text('status').notNull().default('to_contact'), // 'to_contact' | 'booked' | 'cancelled'
+	sortOrder: integer('sort_order').notNull().default(0),
+	notes: text('notes'),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
 

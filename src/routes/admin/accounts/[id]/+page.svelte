@@ -5,6 +5,21 @@
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
 	let editingShowId = $state<string | null>(null);
+
+	const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+	const SCHEDULE_TYPES = [
+		{ value: 'weekly', label: 'Weekly' },
+		{ value: 'fortnightly', label: 'Fortnightly' },
+		{ value: 'monthly', label: 'Monthly' },
+		{ value: 'one_off', label: 'One-off' }
+	];
+
+	function scheduleLabel(show: typeof data.shows[0]) {
+		if (!show.scheduleType) return null;
+		const t = SCHEDULE_TYPES.find((s) => s.value === show.scheduleType)?.label ?? show.scheduleType;
+		const day = show.scheduleDayOfWeek != null ? ` – ${DAYS[show.scheduleDayOfWeek]}` : '';
+		return `${t}${day}`;
+	}
 </script>
 
 <svelte:head><title>{data.account.label} — Admin</title></svelte:head>
@@ -58,6 +73,9 @@
 							</div>
 							{#if editingShowId !== show.id}
 								<div class="flex flex-col gap-0.5 mt-0.5 sm:flex-row sm:flex-wrap sm:gap-x-3">
+									{#if scheduleLabel(show)}
+										<p class="text-xs text-base-content/50">{scheduleLabel(show)}{show.actsPerShow ? ` · ${show.actsPerShow} acts` : ''}</p>
+									{/if}
 									{#if show.humanitixEventId}
 										<p class="text-xs text-base-content/40 font-mono break-all">Humanitix: {show.humanitixEventId}</p>
 									{/if}
@@ -65,7 +83,7 @@
 										<p class="text-xs text-base-content/40 font-mono break-all">Eventbrite: {show.eventbriteEventId}</p>
 									{/if}
 									{#if !show.humanitixEventId && !show.eventbriteEventId}
-										<p class="text-xs text-warning/70">No platform IDs set</p>
+										<p class="text-xs text-base-content/30">No ticket IDs set</p>
 									{/if}
 								</div>
 							{/if}
@@ -114,6 +132,28 @@
 									<input name="show_name" type="text" required value={show.name} class="input input-sm w-44" />
 								</fieldset>
 								<fieldset class="fieldset">
+									<legend class="fieldset-legend">Schedule</legend>
+									<select name="schedule_type" class="select select-sm w-36" value={show.scheduleType ?? ''}>
+										<option value="">— none —</option>
+										{#each SCHEDULE_TYPES as s}
+											<option value={s.value}>{s.label}</option>
+										{/each}
+									</select>
+								</fieldset>
+								<fieldset class="fieldset">
+									<legend class="fieldset-legend">Day of week</legend>
+									<select name="schedule_day_of_week" class="select select-sm w-32" value={show.scheduleDayOfWeek != null ? String(show.scheduleDayOfWeek) : ''}>
+										<option value="">—</option>
+										{#each DAYS as day, i}
+											<option value={String(i)}>{day}</option>
+										{/each}
+									</select>
+								</fieldset>
+								<fieldset class="fieldset">
+									<legend class="fieldset-legend">Acts per show</legend>
+									<input name="acts_per_show" type="number" min="1" value={show.actsPerShow ?? ''} placeholder="e.g. 6" class="input input-sm w-24" />
+								</fieldset>
+								<fieldset class="fieldset">
 									<legend class="fieldset-legend">Venue capacity</legend>
 									<input name="capacity" type="number" min="1" value={show.capacity ?? ''} placeholder="e.g. 80" class="input input-sm w-28" />
 								</fieldset>
@@ -146,6 +186,28 @@
 				<fieldset class="fieldset">
 					<legend class="fieldset-legend">Show name</legend>
 					<input name="show_name" type="text" required placeholder="Comedy Therapy" class="input input-sm w-44" />
+				</fieldset>
+				<fieldset class="fieldset">
+					<legend class="fieldset-legend">Schedule</legend>
+					<select name="schedule_type" class="select select-sm w-36">
+						<option value="">— none —</option>
+						{#each SCHEDULE_TYPES as s}
+							<option value={s.value}>{s.label}</option>
+						{/each}
+					</select>
+				</fieldset>
+				<fieldset class="fieldset">
+					<legend class="fieldset-legend">Day of week</legend>
+					<select name="schedule_day_of_week" class="select select-sm w-32">
+						<option value="">—</option>
+						{#each DAYS as day, i}
+							<option value={String(i)}>{day}</option>
+						{/each}
+					</select>
+				</fieldset>
+				<fieldset class="fieldset">
+					<legend class="fieldset-legend">Acts per show</legend>
+					<input name="acts_per_show" type="number" min="1" placeholder="e.g. 6" class="input input-sm w-24" />
 				</fieldset>
 				<fieldset class="fieldset">
 					<legend class="fieldset-legend">Venue capacity</legend>

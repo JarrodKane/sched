@@ -88,7 +88,7 @@
 							<input type="hidden" name="user_id" value={user.id} />
 							<button
 								type="submit"
-								class="btn btn-ghost btn-xs text-error"
+								class="btn btn-soft btn-error btn-xs"
 								onclick={(e) => { if (!confirm('Delete this user?')) e.preventDefault(); }}
 							>
 								Delete
@@ -137,15 +137,14 @@
 												/>
 												Tickets
 											</label>
-											<label class="flex items-center gap-1.5 text-xs cursor-pointer text-base-content/40">
+											<label class="flex items-center gap-1.5 text-xs cursor-pointer">
 												<input
 													type="checkbox"
 													name="lineups_{acct.id}"
 													bind:checked={assetState[key].lineups}
 													class="checkbox checkbox-xs"
-													disabled
 												/>
-												Lineups <span class="badge badge-xs badge-ghost">v3</span>
+												Lineups
 											</label>
 										</div>
 									{/if}

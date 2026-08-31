@@ -1,13 +1,22 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
 	let showHistory = $state(false);
+	let calendarInput = $state<HTMLInputElement | undefined>();
 
 	function addDays(dateStr: string, n: number): string {
 		const d = new Date(dateStr + 'T12:00:00');
 		d.setDate(d.getDate() + n);
+		return d.toISOString().slice(0, 10);
+	}
+
+	function getMondayOf(dateStr: string): string {
+		const d = new Date(dateStr + 'T12:00:00');
+		const day = d.getDay();
+		d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
 		return d.toISOString().slice(0, 10);
 	}
 
@@ -49,35 +58,49 @@
 		return 'progress-primary';
 	}
 
-	const isCurrentWeek = $derived(data.weekStart === (() => {
-		const d = new Date();
-		const day = d.getDay();
-		const daysBack = day === 0 ? 6 : day - 1;
-		d.setDate(d.getDate() - daysBack);
-		return d.toISOString().slice(0, 10);
-	})());
+	const isCurrentWeek = $derived(data.weekStart === getMondayOf(data.today));
 </script>
 
 <svelte:head><title>Tickets — IG Scheduler</title></svelte:head>
 
 <!-- Week navigation -->
 <div class="flex items-center justify-between gap-2 mb-5">
-	<a href="?week={data.prevWeek}" class="btn btn-ghost btn-sm gap-1 text-base-content/50">
+	<a href="?week={data.prevWeek}" class="btn btn-sm btn-outline gap-1">
 		<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
 		Prev
 	</a>
-	<div class="flex flex-col items-center gap-1.5">
-		<p class="text-sm font-semibold">{formatWeekRange(data.weekStart, data.weekEnd)}</p>
+	<div class="flex flex-col items-center gap-1.5 min-w-0">
+		<p class="text-sm font-semibold whitespace-nowrap">{formatWeekRange(data.weekStart, data.weekEnd)}</p>
 		{#if isCurrentWeek}
 			<span class="badge badge-primary badge-sm">This week</span>
 		{:else}
-			<a href="?" class="badge badge-ghost badge-sm cursor-pointer hover:badge-primary transition-colors">↩ This week</a>
+			<a href="?" class="badge badge-outline badge-sm cursor-pointer hover:badge-primary transition-colors">↩ This week</a>
 		{/if}
 	</div>
-	<a href="?week={data.nextWeek}" class="btn btn-ghost btn-sm gap-1 text-base-content/50">
-		Next
-		<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-	</a>
+	<div class="flex items-center gap-1">
+		<div class="relative">
+			<button
+				type="button"
+				class="btn btn-sm btn-soft btn-square"
+				title="Jump to week"
+				onclick={() => calendarInput?.showPicker?.() ?? calendarInput?.click()}
+			>
+				<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+			</button>
+			<input
+				bind:this={calendarInput}
+				type="date"
+				value={data.weekStart}
+				onchange={(e) => { if (e.currentTarget.value) goto(`?week=${getMondayOf(e.currentTarget.value)}`); }}
+				class="absolute inset-0 opacity-0 pointer-events-none w-px"
+				tabindex="-1"
+			/>
+		</div>
+		<a href="?week={data.nextWeek}" class="btn btn-sm btn-outline gap-1">
+			Next
+			<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+		</a>
+	</div>
 </div>
 
 {#if data.showDates.length === 0}
@@ -203,7 +226,7 @@
 			{#if data.historyPage > 1 || data.hasOlderHistory}
 				<div class="flex items-center justify-between pt-2 mt-1 border-t border-base-300">
 					{#if data.hasOlderHistory}
-						<a href="?week={data.weekStart}&hp={data.historyPage + 1}" class="btn btn-ghost btn-xs gap-1">
+						<a href="?week={data.weekStart}&hp={data.historyPage + 1}" class="btn btn-outline btn-xs gap-1">
 							<svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
 							Older
 						</a>
@@ -212,7 +235,7 @@
 					{/if}
 					<span class="text-xs text-base-content/30">page {data.historyPage}</span>
 					{#if data.historyPage > 1}
-						<a href="?week={data.weekStart}&hp={data.historyPage - 1}" class="btn btn-ghost btn-xs gap-1">
+						<a href="?week={data.weekStart}&hp={data.historyPage - 1}" class="btn btn-outline btn-xs gap-1">
 							Newer
 							<svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
 						</a>

@@ -11,7 +11,7 @@ export const load: LayoutServerLoad = async ({ params, parent }) => {
 
 	let canAccessSocial = true;
 	let canAccessTickets = true;
-	let canAccessLineups = false;
+	let canAccessLineups = true;
 
 	if (!profile.isAdmin) {
 		const row = await getAccessRow(profile.id, params.id);

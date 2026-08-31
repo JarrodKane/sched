@@ -40,13 +40,18 @@ export const actions: Actions = {
 		const eventbriteEventId = (form.get('eventbrite_event_id') as string)?.trim() || null;
 		const capacityRaw = (form.get('capacity') as string)?.trim();
 		const capacity = capacityRaw ? parseInt(capacityRaw, 10) || null : null;
+		const scheduleType = (form.get('schedule_type') as string)?.trim() || null;
+		const schedDayRaw = (form.get('schedule_day_of_week') as string)?.trim();
+		const scheduleDayOfWeek = schedDayRaw !== '' && schedDayRaw != null ? parseInt(schedDayRaw, 10) : null;
+		const actsRaw = (form.get('acts_per_show') as string)?.trim();
+		const actsPerShow = actsRaw ? parseInt(actsRaw, 10) || null : null;
 
 		if (!name) return fail(400, { showError: 'Show name is required.' });
-		if (!humanitixEventId && !eventbriteEventId) {
-			return fail(400, { showError: 'At least one ticket platform ID is required.' });
-		}
 
-		await db.insert(shows).values({ accountId: params.id, name, humanitixEventId, eventbriteEventId, capacity });
+		await db.insert(shows).values({
+			accountId: params.id, name, humanitixEventId, eventbriteEventId, capacity,
+			scheduleType, scheduleDayOfWeek, actsPerShow
+		});
 		return { showAdded: true };
 	},
 
@@ -60,11 +65,16 @@ export const actions: Actions = {
 		const eventbriteEventId = (form.get('eventbrite_event_id') as string)?.trim() || null;
 		const capacityRaw = (form.get('capacity') as string)?.trim();
 		const capacity = capacityRaw ? parseInt(capacityRaw, 10) || null : null;
+		const scheduleType = (form.get('schedule_type') as string)?.trim() || null;
+		const schedDayRaw = (form.get('schedule_day_of_week') as string)?.trim();
+		const scheduleDayOfWeek = schedDayRaw !== '' && schedDayRaw != null ? parseInt(schedDayRaw, 10) : null;
+		const actsRaw = (form.get('acts_per_show') as string)?.trim();
+		const actsPerShow = actsRaw ? parseInt(actsRaw, 10) || null : null;
 
 		if (!id || !name) return fail(400, { showError: 'Show name is required.' });
 
 		await db.update(shows)
-			.set({ name, humanitixEventId, eventbriteEventId, capacity })
+			.set({ name, humanitixEventId, eventbriteEventId, capacity, scheduleType, scheduleDayOfWeek, actsPerShow })
 			.where(eq(shows.id, id));
 
 		return { showUpdated: true };

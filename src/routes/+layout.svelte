@@ -42,6 +42,7 @@
 					{#if data.profile.isAdmin}
 						<li><a href="/admin/accounts" class={isActive('/admin/accounts') ? 'menu-active' : ''}>Accounts</a></li>
 						<li><a href="/admin/users" class={isActive('/admin/users') ? 'menu-active' : ''}>Users</a></li>
+						<li><a href="/admin/people" class={isActive('/admin/people') ? 'menu-active' : ''}>People</a></li>
 					{/if}
 					<li class="border-t border-base-200 mt-1 pt-1">
 						<form method="POST" action="/login?/logout">
@@ -62,6 +63,7 @@
 				{#if data.profile.isAdmin}
 					<li><a href="/admin/accounts" class={isActive('/admin/accounts') ? 'menu-active' : ''}>Accounts</a></li>
 					<li><a href="/admin/users" class={isActive('/admin/users') ? 'menu-active' : ''}>Users</a></li>
+					<li><a href="/admin/people" class={isActive('/admin/people') ? 'menu-active' : ''}>People</a></li>
 				{/if}
 			</ul>
 		</div>
