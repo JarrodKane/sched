@@ -1,3 +1,19 @@
+/**
+ * +server.ts — /api/people
+ * Two endpoints for the people directory, used by the AddActForm live search:
+ *
+ *   GET  — search for people by name or Instagram handle (?q=query); returns up
+ *           to 8 results as { results: [...] }. Used for the debounced typeahead
+ *           dropdown in AddActForm.
+ *
+ *   POST — create a new person from JSON { name, instagram? }; returns { person }
+ *           with the inserted row. Called when the user picks "Create [name] in
+ *           directory" from the AddActForm search dropdown.
+ *
+ * SvelteKit concepts:
+ *   RequestHandler (GET / POST) — plain JSON endpoints; no form actions
+ *   json()  — from @sveltejs/kit; wraps the response object
+ */
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { people } from '$lib/server/db/schema';

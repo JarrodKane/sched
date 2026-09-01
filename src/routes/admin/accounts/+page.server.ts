@@ -1,3 +1,19 @@
+/**
+ * +page.server.ts — /admin/accounts
+ * Admin accounts list. Shows all non-deleted social accounts with their token
+ * expiry status. Allows adding accounts manually (paste token) or soft-deleting them.
+ * Also reads ?message and ?error query params written by the OAuth callback.
+ *
+ * Actions:
+ *   add    — insert a new social_accounts row with a manually pasted long-lived token
+ *   remove — soft-delete (sets deletedAt) after the user types "delete" to confirm
+ *
+ * SvelteKit concepts:
+ *   load()    — no explicit admin check (layout guard covers this); reads
+ *               ?message and ?error from url.searchParams for OAuth feedback
+ *   actions   — two named actions; each calls requireAdmin() before mutating
+ *   fail()    — returns 4xx with addError / removeError strings
+ */
 import { fail } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { users, socialAccounts } from '$lib/server/db/schema';

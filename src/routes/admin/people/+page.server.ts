@@ -1,3 +1,21 @@
+/**
+ * +page.server.ts — /admin/people
+ * People directory page. Lists all people (name, Instagram handle, photo URL).
+ * Visible to any user who has lineup access on at least one account; add/edit/delete
+ * mutations are restricted to admins.
+ *
+ * Actions:
+ *   add    — insert a new person (admin only)
+ *   update — edit a person's name and Instagram handle (admin only)
+ *   delete — remove a person from the directory (admin only)
+ *
+ * SvelteKit concepts:
+ *   load()   — checks lineup access for non-admins (any account qualifies); loads
+ *              all people ordered by name
+ *   actions  — three named actions; each calls getProfile() and checks isAdmin
+ *   fail()   — returns 4xx with an error string
+ *   error()  — throws 403 if the user has no lineup access at all
+ */
 import { error, fail } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { users, people, userAccountAccess } from '$lib/server/db/schema';

@@ -1,3 +1,17 @@
+<!--
+  +page.svelte — /admin/accounts
+  Admin accounts list. Shows all social accounts with token expiry warnings
+  (expired / expiring-soon banners at the top), a "Connect with Instagram" OAuth
+  button, and per-account Manage / Reconnect / Remove actions. Remove opens an
+  inline confirmation modal that requires typing "delete".
+
+  Svelte features:
+    $state    — deleteTarget ({ id, label } | null), confirmText (typed confirmation)
+    $props()  — receives data (accounts[]) and form (action results)
+    use:enhance — on the remove form inside the confirmation modal; calls closeDelete()
+                  in the enhance callback so the modal closes before the page updates
+-->
+
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import type { ActionData, PageData } from './$types';

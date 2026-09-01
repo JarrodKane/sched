@@ -1,7 +1,25 @@
+/**
+ * +page.server.ts — /admin/accounts/[id]
+ * Admin page for managing one social account's ticket shows (linked via Humanitix
+ * and/or Eventbrite event IDs). Admins can add, edit, toggle active state, and delete shows.
+ *
+ * Actions:
+ *   addShow     — create a new show for this account
+ *   updateShow  — edit a show's name, schedule type, day of week, capacity, event IDs
+ *   deleteShow  — permanently delete a show (and all its ticket history)
+ *   toggleShow  — flip a show's isActive flag (pause / resume ticket polling)
+ *
+ * SvelteKit concepts:
+ *   load()    — calls requireAdmin() directly (not via layout parent); loads the
+ *               account row + its shows from Drizzle
+ *   actions   — four named actions; each calls requireAdmin() before mutating
+ *   fail()    — returns 4xx with a showError string for inline display
+ *   error()   — throws 403/404 from load if access denied or account not found
+ */
 import { error, fail } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { users, socialAccounts, shows } from '$lib/server/db/schema';
-import { eq, asc, isNull } from 'drizzle-orm';
+import { eq, and, asc, isNull } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
 
 async function requireAdmin(locals: App.Locals) {
@@ -55,7 +73,7 @@ export const actions: Actions = {
 		return { showAdded: true };
 	},
 
-	updateShow: async ({ request, locals }) => {
+	updateShow: async ({ request, locals, params }) => {
 		if (!await requireAdmin(locals)) return fail(403, { showError: 'Access denied' });
 
 		const form = await request.formData();
@@ -75,23 +93,23 @@ export const actions: Actions = {
 
 		await db.update(shows)
 			.set({ name, humanitixEventId, eventbriteEventId, capacity, scheduleType, scheduleDayOfWeek, actsPerShow })
-			.where(eq(shows.id, id));
+			.where(and(eq(shows.id, id), eq(shows.accountId, params.id)));
 
 		return { showUpdated: true };
 	},
 
-	deleteShow: async ({ request, locals }) => {
+	deleteShow: async ({ request, locals, params }) => {
 		if (!await requireAdmin(locals)) return fail(403, { showError: 'Access denied' });
 
 		const form = await request.formData();
 		const id = (form.get('id') as string)?.trim();
 		if (!id) return fail(400, { showError: 'Missing show ID.' });
 
-		await db.delete(shows).where(eq(shows.id, id));
+		await db.delete(shows).where(and(eq(shows.id, id), eq(shows.accountId, params.id)));
 		return { showDeleted: true };
 	},
 
-	toggleShow: async ({ request, locals }) => {
+	toggleShow: async ({ request, locals, params }) => {
 		if (!await requireAdmin(locals)) return fail(403, { showError: 'Access denied' });
 
 		const form = await request.formData();
@@ -99,7 +117,7 @@ export const actions: Actions = {
 		const active = form.get('active') === 'true';
 		if (!id) return fail(400, { showError: 'Missing show ID.' });
 
-		await db.update(shows).set({ isActive: !active }).where(eq(shows.id, id));
+		await db.update(shows).set({ isActive: !active }).where(and(eq(shows.id, id), eq(shows.accountId, params.id)));
 		return { showToggled: true };
 	}
 };

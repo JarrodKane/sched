@@ -1,3 +1,19 @@
+<!--
+  +page.svelte — /accounts/[id]/lineups
+  Week view for lineups. Shows prev/next week navigation, a calendar-jump input,
+  and a card per show with its lineup for the selected week (or an "open lineup"
+  button if none exists). Weekly shows get a computed "expected date" for the week.
+
+  Svelte features:
+    $state     — calendarValue (date input for jumping to a specific week)
+    $derived   — weekShows: merges data.shows with the selected week's lineups
+                 and computes expectedDate for weekly/fortnightly show schedules
+    $props()   — receives data (shows, lineups, weekStart, weekEnd) and form
+    use:enhance — on the openLineup form; on success, the server redirects to the
+                  lineup page (the action uses redirect(), not return data)
+    goto()     — navigates to the selected week when the calendar input changes
+-->
+
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { goto } from '$app/navigation';

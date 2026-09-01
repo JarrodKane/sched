@@ -1,3 +1,18 @@
+<!--
+  +page.svelte — /accounts/[id]/media
+  Image grid for the account's media library. Supports filtering (All / Posted),
+  a select mode for mass deletion, and per-file actions (preview, crop, use as post,
+  delete). Files in use by a pending post show a lock warning and cannot be deleted.
+
+  Svelte features:
+    $state     — filter, selectMode, selectedUrls (Set<string>), and bind:this
+                 refs for CropModal and PostPreviewModal
+    $props()   — receives data (uploads[] with inUse/hasBeenPosted flags) and form
+    use:enhance — on the delete and deleteMany forms
+    bind:this  — on CropModal and PostPreviewModal; allows calling their open() methods
+    invalidateAll() — refreshes the file list after a successful crop/upload
+-->
+
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';

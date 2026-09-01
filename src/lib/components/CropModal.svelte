@@ -1,3 +1,25 @@
+<!--
+  CropModal.svelte
+  Full-screen image cropping modal backed by Cropper.js. Accepts an image via
+  file upload or an existing URL, crops it to the correct aspect ratio (1:1 or
+  4:5 for feed, 9:16 for story), then uploads the cropped canvas to Supabase
+  Storage and calls oncomplete with the public URL and a JPEG thumbnail URL.
+
+  Svelte features:
+    $state         — open/closed, cropper instance, image URL, selected ratio,
+                     upload progress, drag state, post type, editingExisting flag
+    $derived       — activeRatios: filters ratio options based on the current postType
+    $effect (×3)   — (1) auto-selects the first valid ratio when postType changes;
+                     (2) initialises Cropper.js when the modal opens or the image URL
+                         changes — returns a cleanup fn that destroys the instance;
+                     (3) attaches/removes an arrow-key handler for fine-grained rotation
+    $props()       — receives accountId, maxUploadBytes, oncomplete, oncancel
+
+  Exported methods (call via bind:this):
+    openWithFile(file, postType, editingExisting?) — open with a local File object
+    openWithUrl(url, postType)                     — open with an already-uploaded URL
+-->
+
 <script lang="ts">
 	import Cropper from 'cropperjs';
 	import 'cropperjs/dist/cropper.css';

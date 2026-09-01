@@ -1,3 +1,20 @@
+<!--
+  TextOverlayModal.svelte
+  Canvas-based text overlay editor. Lets the user position a text label on an
+  image by dragging, adjust font size, weight, colour and alignment, then flatten
+  the result to a JPEG and upload it to Supabase Storage via /api/upload.
+
+  Svelte features:
+    $state     — isOpen, imageUrl, text, fontSize, fontWeight, colour, align,
+                 position {x, y}, isDragging, canvasRef, imgRef, uploading
+    $effect    — redraws the canvas whenever text content or style state changes;
+                 also attaches/removes pointer-event listeners for drag interaction
+    $props()   — receives accountId, oncomplete, oncancel
+
+  Exported methods (call via bind:this):
+    openWithUrl(imageUrl: string) — opens the editor loaded with an existing image
+-->
+
 <script lang="ts">
 	interface Props {
 		accountId: string;

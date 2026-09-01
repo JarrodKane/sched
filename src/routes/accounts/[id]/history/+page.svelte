@@ -1,3 +1,16 @@
+<!--
+  +page.svelte — /accounts/[id]/history
+  Post history page. Groups posts by day (Today / Yesterday / date label) and
+  shows each post's thumbnail, caption (collapsible), status badge, and a copy
+  button for the caption. Failed posts display their error message and a retry form.
+
+  Svelte features:
+    $state       — expandedIds (Set<string>): which long captions are expanded
+    $derived.by  — dayGroups: buckets posts into ordered { label, posts[] } groups
+    $props()     — receives data (history[], accountMeta) and form (action result)
+    use:enhance  — on the retry form
+-->
+
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import type { PageData } from './$types';

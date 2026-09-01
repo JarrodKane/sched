@@ -1,3 +1,20 @@
+<!--
+  +layout.svelte — /
+  App shell. Renders the top nav bar (logo, hamburger for mobile, theme toggle,
+  sign-out button) and the current page's content below it. Manages the light/dark
+  theme preference, stored in localStorage and applied as a data-theme attribute on
+  the root <html> element.
+
+  SvelteKit / Svelte features:
+    $props()             — receives data (session/profile) and children (Snippet)
+    {@render children()} — Svelte 5 replacement for <slot/>; renders the active page
+    $state               — mobileMenuOpen, theme ('bumblebee' | 'abyss')
+    $effect              — applies the chosen theme to document.documentElement on
+                           change and persists the preference to localStorage
+    page                 — from $app/state; used to highlight the active route in
+                           the nav and gate sign-out visibility
+-->
+
 <script lang="ts">
 	import { page } from '$app/state';
 	import './layout.css';

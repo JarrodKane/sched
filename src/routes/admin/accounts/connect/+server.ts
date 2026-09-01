@@ -1,3 +1,17 @@
+/**
+ * +server.ts — /admin/accounts/connect
+ * Instagram OAuth entry point. Builds the authorization URL with the required
+ * business scopes, stores a CSRF state token in an httpOnly cookie, and redirects
+ * the browser to Instagram's login consent page.
+ *
+ * An optional ?account_id= query param embeds a target account UUID in the state
+ * string so the callback knows which DB row to update (the "Reconnect" flow).
+ *
+ * SvelteKit concepts:
+ *   RequestHandler (GET) — plain endpoint; always redirects; no body returned
+ *   cookies.set()        — stores the CSRF state; httpOnly, sameSite:'lax', 10m TTL
+ *   redirect()           — sends the browser to Instagram's OAuth URL
+ */
 import { redirect } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { db } from '$lib/server/db';

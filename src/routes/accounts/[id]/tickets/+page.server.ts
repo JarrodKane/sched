@@ -1,3 +1,14 @@
+/**
+ * +page.server.ts — /accounts/[id]/tickets
+ * Ticket week view. Loads this week's snapshots for all shows under this account,
+ * plus a paginated history of past weeks (10 weeks per page, newest first).
+ *
+ * SvelteKit concepts:
+ *   load()   — reads parent() for canAccessTickets and accountMeta; ?week= selects
+ *              the week (ISO Monday date, defaults to current week); ?hpage= paginates
+ *              the weekly history table
+ *   parent() — inherits canAccessTickets and accountMeta from the account layout load
+ */
 import { error } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { shows, ticketSnapshots } from '$lib/server/db/schema';

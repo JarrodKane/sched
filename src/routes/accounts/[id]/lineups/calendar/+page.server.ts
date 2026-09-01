@@ -1,3 +1,13 @@
+/**
+ * +page.server.ts — /accounts/[id]/lineups/calendar
+ * Monthly calendar view. Loads all lineups for the selected month, grouped by
+ * date, with entry counts per lineup (for the coloured pill display on each day).
+ *
+ * SvelteKit concepts:
+ *   load()   — reads parent() for canAccessLineups; ?month= selects the month
+ *              (YYYY-MM format, defaults to current month)
+ *   parent() — inherits canAccessLineups from the account layout load
+ */
 import { error } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { shows, lineups, lineupEntries } from '$lib/server/db/schema';

@@ -1,3 +1,21 @@
+/**
+ * +server.ts — /api/people/[id]/photo
+ * Two endpoints for updating a person's profile photo:
+ *
+ *   POST  — accepts multipart/form-data with a 'file' field; uploads the raw image
+ *            to Supabase Storage at people/[id]/[timestamp].[ext], updates
+ *            people.photo_url, and deletes the previous photo from storage.
+ *            Used by direct file-input flows (upload without cropping).
+ *
+ *   PATCH — accepts JSON { photoUrl }; saves a URL that was already uploaded
+ *            (e.g. by CropModal) to people.photo_url and deletes the old photo.
+ *            Used by the CropModal flow after the cropped image is uploaded.
+ *
+ * SvelteKit concepts:
+ *   RequestHandler (POST / PATCH) — plain JSON endpoints
+ *   json()   — from @sveltejs/kit; wraps the response
+ *   error()  — throws HTTP errors for auth failure, bad input, or upload errors
+ */
 import { json, error } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { people } from '$lib/server/db/schema';

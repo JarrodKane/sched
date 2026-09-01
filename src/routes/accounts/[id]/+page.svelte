@@ -1,3 +1,30 @@
+<!--
+  +page.svelte — /accounts/[id]
+  Main schedule page. Hosts the full post scheduling form: image upload via
+  CropModal or GalleryPickModal, text overlay via TextOverlayModal, caption input
+  with AI generation and undo, tag insertion, feed/story/carousel toggle, and a
+  date/time picker. The PostQueuePanel renders the upcoming queue and recent history.
+
+  Carousel mode allows multiple images with per-slide tag maps, drag-to-reorder,
+  and individual remove buttons. The AI caption generator calls the
+  /accounts/[id]/generate-caption endpoint and stores previous drafts in a local
+  captionHistory array for undo.
+
+  Svelte features:
+    $state       — uploadedUrl, thumbnailUrlForPost, uploadError, scheduling,
+                   generatingCaption, generateError, captionStyle, captionHistory,
+                   postType, postNow, caption, carouselUrls, carouselTagMap,
+                   dragIndex, dropTargetIndex, selectedTags, tagSearch, imageDimensions,
+                   captionEl, fileInput, and bind:this refs for all modal components
+    $props()     — receives data (queue, history, uploads, snippets, tags, etc.)
+                   and form (action result for flash messages)
+    use:enhance  — on the main schedule form; tracks scheduling state for the spinner
+    invalidateAll() — refreshes page data after a crop upload completes
+    bind:this    — on CropModal, TextOverlayModal, PostPreviewModal, RescheduleModal,
+                   GalleryPickModal, EditCaptionModal, ViewCaptionModal; allows calling
+                   each component's open() method from parent event handlers
+-->
+
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
@@ -5,6 +32,11 @@
 	import CropModal from '$lib/components/CropModal.svelte';
 	import TextOverlayModal from '$lib/components/TextOverlayModal.svelte';
 	import PostPreviewModal from '$lib/components/PostPreviewModal.svelte';
+	import RescheduleModal from '$lib/components/RescheduleModal.svelte';
+	import GalleryPickModal from '$lib/components/GalleryPickModal.svelte';
+	import EditCaptionModal from '$lib/components/EditCaptionModal.svelte';
+	import ViewCaptionModal from '$lib/components/ViewCaptionModal.svelte';
+	import PostQueuePanel from '$lib/components/PostQueuePanel.svelte';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -51,6 +83,7 @@
 		captionHistory = captionHistory.slice(0, -1);
 		caption = prev;
 	}
+
 	let postType = $state<'feed' | 'story' | 'carousel'>('feed');
 	let postNow = $state(false);
 	let caption = $state('');
@@ -58,12 +91,9 @@
 	let fileInput = $state<HTMLInputElement | null>(null);
 	let imageDimensions = $state<{ width: number; height: number } | null>(null);
 
-	// Right-panel tab
-	let queueTab = $state<'upcoming' | 'history'>('upcoming');
-
 	// Carousel state
 	let carouselUrls = $state<string[]>([]);
-	let addingToCarousel = $state(false); // flag so crop callback appends instead of replaces
+	let addingToCarousel = $state(false);
 
 	// Carousel drag-to-reorder
 	let dragIndex = $state<number | null>(null);
@@ -77,8 +107,6 @@
 		if (dragIndex !== null && dragIndex !== i) dropTargetIndex = i;
 	}
 	function onCarouselDragEnd() { dragIndex = null; dropTargetIndex = null; }
-	// ondragover and ondrop live on the container — individual items only need ondragenter.
-	// Putting ondragover on items misses the gaps between them, causing drops to fail.
 	function onCarouselContainerDragOver(e: DragEvent) {
 		if (dragIndex !== null) e.preventDefault();
 	}
@@ -87,13 +115,10 @@
 		if (dragIndex === null || dropTargetIndex === null) { dragIndex = null; dropTargetIndex = null; return; }
 		const from = dragIndex, to = dropTargetIndex;
 		dragIndex = null; dropTargetIndex = null;
-		// Build new order as a permutation of old indices
 		const oldOrder = Array.from({ length: carouselUrls.length }, (_, i) => i);
 		const [movedIdx] = oldOrder.splice(from, 1);
 		oldOrder.splice(to, 0, movedIdx);
-		// oldOrder[newPos] = oldPos
 		carouselUrls = oldOrder.map((i) => carouselUrls[i]);
-		// Remap tag map to follow images to their new positions
 		const newMap: Record<number, string[]> = {};
 		for (let newPos = 0; newPos < oldOrder.length; newPos++) {
 			const oldPos = oldOrder[newPos];
@@ -101,7 +126,6 @@
 			if (tags?.length) newMap[newPos] = tags;
 		}
 		carouselTagMap = newMap;
-		// Keep selector on the same image
 		tagImageIndex = oldOrder.indexOf(tagImageIndex);
 	}
 
@@ -109,94 +133,22 @@
 	let selectedTags = $state<string[]>([]);
 	let customTagInput = $state('');
 
-	// Carousel-specific tag state: which image is active for tagging, and a map of imageIndex → usernames
 	let tagImageIndex = $state(0);
 	let carouselTagMap = $state<Record<number, string[]>>({});
-	// Unified view: tags for the currently-active context (carousel image or single post)
 	const activeTags = $derived(
 		postType === 'carousel' ? (carouselTagMap[tagImageIndex] ?? []) : selectedTags
 	);
 
-	// Shared preview modal — used for both the "Preview post" button and queue items
+	// Modal refs
 	let previewModal = $state<PostPreviewModal | null>(null);
-
-	// Reschedule modal
-	let rescheduleDialog = $state<HTMLDialogElement | null>(null);
-	let rescheduleForm = $state<HTMLFormElement | null>(null);
-	let reschedulePostId = $state('');
-	let rescheduleTime = $state('');
-	let rescheduling = $state(false);
-	let rescheduleError = $state('');
-	let cancelling = $state<string | null>(null);
-	let retrying = $state<string | null>(null);
-
-	// Gallery pick modal
-	let galleryDialog = $state<HTMLDialogElement | null>(null);
-
-	function pickFromGallery(url: string) {
-		if (addingToCarousel) {
-			if (carouselUrls.length < 10) carouselUrls = [...carouselUrls, url];
-			addingToCarousel = false;
-		} else {
-			uploadedUrl = url;
-			thumbnailUrlForPost = '';
-			uploadError = '';
-			checkDimensions(url);
-		}
-		galleryDialog?.close();
-	}
-
-	// Edit caption modal
-	let editCaptionDialog = $state<HTMLDialogElement | null>(null);
-	let editCaptionPostId = $state('');
-	let editCaptionValue = $state('');
-	let editingCaption = $state(false);
-	let editCaptionError = $state('');
-
-	function openEditCaption(postId: string, currentCaption: string | null) {
-		editCaptionPostId = postId;
-		editCaptionValue = currentCaption ?? '';
-		editCaptionError = '';
-		editCaptionDialog?.showModal();
-	}
-
 	let cropModal = $state<CropModal | null>(null);
 	let textOverlayModal = $state<TextOverlayModal | null>(null);
+	let rescheduleModal = $state<RescheduleModal | null>(null);
+	let galleryModal = $state<GalleryPickModal | null>(null);
+	let editCaptionModal = $state<EditCaptionModal | null>(null);
+	let viewCaptionModal = $state<ViewCaptionModal | null>(null);
 
-	// View caption modal (history panel)
-	let viewCaptionDialog = $state<HTMLDialogElement | null>(null);
-	let viewCaptionText = $state('');
-	let viewCaptionCopied = $state(false);
-
-	function openViewCaption(caption: string) {
-		viewCaptionText = caption;
-		viewCaptionCopied = false;
-		viewCaptionDialog?.showModal();
-	}
-
-	async function copyViewCaption() {
-		await navigator.clipboard.writeText(viewCaptionText);
-		viewCaptionCopied = true;
-		setTimeout(() => { viewCaptionCopied = false; }, 1500);
-	}
-
-	// ── Helpers ─────────────────────────────────────────────────────────────────
-
-	function relativeTime(date: string | Date): string {
-		const d = new Date(date);
-		const diff = d.getTime() - Date.now();
-		const abs = Math.abs(diff);
-		const past = diff < 0;
-		if (abs < 60_000) return past ? 'just now' : 'in less than a minute';
-		const mins = Math.round(abs / 60_000);
-		if (mins < 60) return past ? `${mins}m ago` : `in ${mins}m`;
-		const hours = Math.floor(mins / 60);
-		const remMins = mins % 60;
-		if (hours < 24) return past ? `${hours}h ${remMins}m ago` : `in ${hours}h${remMins > 0 ? ` ${remMins}m` : ''}`;
-		const midnight = (x: Date) => { const c = new Date(x); c.setHours(0, 0, 0, 0); return c; };
-		const days = Math.round(Math.abs(midnight(new Date()).getTime() - midnight(d).getTime()) / 86_400_000);
-		return past ? `${days}d ago` : `in ${days}d`;
-	}
+	// ── Helpers ──────────────────────────────────────────────────────────────────
 
 	function checkDimensions(url: string) {
 		imageDimensions = null;
@@ -230,20 +182,14 @@
 		captionEl.focus();
 	}
 
-	// ── File / crop actions ──────────────────────────────────────────────────────
+	// ── File / crop actions ───────────────────────────────────────────────────────
 
 	function handleFileSelect(e: Event) {
 		const input = e.target as HTMLInputElement;
 		const file = input.files?.[0];
 		if (!file) return;
-		if (!file.type.startsWith('image/')) {
-			uploadError = 'Only image files are supported.';
-			return;
-		}
-		if (file.size > 15 * 1024 * 1024) {
-			uploadError = 'Image must be 15 MB or smaller.';
-			return;
-		}
+		if (!file.type.startsWith('image/')) { uploadError = 'Only image files are supported.'; return; }
+		if (file.size > 15 * 1024 * 1024) { uploadError = 'Image must be 15 MB or smaller.'; return; }
 		uploadError = '';
 		cropModal?.openWithFile(file, postType);
 	}
@@ -275,7 +221,6 @@
 	function removeCarouselItem(i: number) {
 		const newLength = carouselUrls.length - 1;
 		carouselUrls = carouselUrls.filter((_, idx) => idx !== i);
-		// Shift tag map: drop entry at i, shift entries > i down by 1
 		const newMap: Record<number, string[]> = {};
 		for (const [k, v] of Object.entries(carouselTagMap)) {
 			const ki = +k;
@@ -292,13 +237,11 @@
 		const arr = [...carouselUrls];
 		[arr[i], arr[j]] = [arr[j], arr[i]];
 		carouselUrls = arr;
-		// Swap tags alongside the images
 		const newMap = { ...carouselTagMap };
 		const ti = carouselTagMap[i], tj = carouselTagMap[j];
 		if (ti?.length) newMap[j] = ti; else delete newMap[j];
 		if (tj?.length) newMap[i] = tj; else delete newMap[i];
 		carouselTagMap = newMap;
-		// Keep the selector pointing at the same image
 		if (tagImageIndex === i) tagImageIndex = j;
 		else if (tagImageIndex === j) tagImageIndex = i;
 	}
@@ -340,7 +283,6 @@
 	}
 
 	function handleCropCancel() {
-		// Reset file input so it doesn't show a stale filename
 		if (fileInput) fileInput.value = '';
 	}
 
@@ -361,6 +303,8 @@
 		}
 	}
 
+	// ── Queue panel callbacks ─────────────────────────────────────────────────────
+
 	function openQueueItemPreview(post: { mediaUrl: string; type: string; caption: string | null; carouselItems?: string | null }) {
 		let urls: string[] | undefined;
 		if (post.type === 'carousel' && post.carouselItems) {
@@ -374,28 +318,30 @@
 		});
 	}
 
-	function openReschedule(postId: string, currentScheduledFor: string | Date) {
-		reschedulePostId = postId;
-		rescheduleError = '';
-		const d = new Date(currentScheduledFor);
-		// Default to the same time but tomorrow, or 1 hour from now if that's further out
-		const tomorrow = new Date(d);
-		tomorrow.setDate(tomorrow.getDate() + 1);
-		const oneHourFromNow = new Date(Date.now() + 60 * 60 * 1000);
-		rescheduleTime = (tomorrow > oneHourFromNow ? tomorrow : oneHourFromNow).toISOString().slice(0, 16);
-		rescheduleDialog?.showModal();
+	function handleGalleryPick(url: string, mode: 'single' | 'carousel') {
+		if (mode === 'carousel') {
+			if (carouselUrls.length < 10) carouselUrls = [...carouselUrls, url];
+		} else {
+			uploadedUrl = url;
+			thumbnailUrlForPost = '';
+			uploadError = '';
+			checkDimensions(url);
+		}
 	}
 
 	// Smart default: current time rounded up to the next 15-min mark, + 1 hour
-	function defaultScheduleTime(): string {
-		const d = new Date(Date.now() + 60 * 60 * 1000);
-		const mins = d.getMinutes();
-		d.setMinutes(Math.ceil(mins / 15) * 15, 0, 0);
-		return d.toISOString().slice(0, 16);
+	function toLocalInput(d: Date): string {
+		return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 	}
 
-	// Derived so it stays current across 30s poll cycles (invalidateAll re-renders the component)
-	const minDatetime = $derived(new Date(Date.now() + 60_000).toISOString().slice(0, 16));
+	function defaultScheduleTime(): string {
+		const d = new Date(Date.now() + 30 * 60 * 1000);
+		const mins = d.getMinutes();
+		d.setMinutes(Math.ceil(mins / 15) * 15, 0, 0);
+		return toLocalInput(d);
+	}
+
+	const minDatetime = $derived(toLocalInput(new Date(Date.now() + 60_000)));
 	let scheduledFor = $state(defaultScheduleTime());
 
 	$effect(() => {
@@ -485,183 +431,23 @@
 	</div>
 {:else}
 
-<!-- Crop modal -->
+<!-- Modals -->
 <CropModal
 	bind:this={cropModal}
 	accountId={data.account.id}
 	oncomplete={handleCropComplete}
 	oncancel={handleCropCancel}
 />
-
-<!-- Text overlay modal -->
 <TextOverlayModal
 	bind:this={textOverlayModal}
 	accountId={data.account.id}
 	oncomplete={(url) => { uploadedUrl = url; thumbnailUrlForPost = ''; checkDimensions(url); }}
 />
-
-<!-- ── Preview modal ───────────────────────────────────────────────────────────── -->
 <PostPreviewModal bind:this={previewModal} accountLabel={data.account.label} />
-
-<!-- ── Reschedule modal ───────────────────────────────────────────────────────── -->
-<dialog bind:this={rescheduleDialog} class="modal modal-bottom sm:modal-middle">
-	<div class="modal-box max-w-sm">
-		<h3 class="font-semibold mb-4">Reschedule post</h3>
-		<form
-			bind:this={rescheduleForm}
-			method="POST"
-			action="?/reschedule"
-			use:enhance={() => {
-				rescheduling = true;
-				return async ({ result, update }) => {
-					rescheduling = false;
-					if (result.type === 'failure') {
-						rescheduleError = (result.data as { error?: string })?.error ?? 'Failed to reschedule.';
-					} else {
-						rescheduleError = '';
-						rescheduleDialog?.close();
-					}
-					await update();
-				};
-			}}
-			class="flex flex-col gap-4"
-		>
-			<input type="hidden" name="post_id" value={reschedulePostId} />
-			<fieldset class="fieldset">
-				<legend class="fieldset-legend">New date & time</legend>
-				<div class="flex gap-2 items-center">
-					<input
-						type="datetime-local"
-						name="scheduled_for"
-						bind:value={rescheduleTime}
-						min={minDatetime}
-						required
-						class="input flex-1 min-w-0"
-					/>
-					<button type="submit" disabled={rescheduling} class="btn btn-primary shrink-0">
-						{#if rescheduling}<span class="loading loading-spinner loading-sm"></span>{/if}
-						{rescheduling ? '…' : 'Reschedule'}
-					</button>
-				</div>
-			</fieldset>
-			{#if rescheduleError}
-				<div role="alert" class="alert alert-error alert-soft text-sm">{rescheduleError}</div>
-			{/if}
-			<div class="flex gap-2">
-				<button
-					type="button"
-					disabled={rescheduling}
-					onclick={() => {
-						rescheduleTime = new Date(Date.now() + 60_000).toISOString().slice(0, 16);
-						rescheduleForm?.requestSubmit();
-					}}
-					class="btn btn-outline flex-1"
-				>Publish now</button>
-				<button type="button" onclick={() => rescheduleDialog?.close()} class="btn btn-ghost flex-1 text-base-content/50">Cancel</button>
-			</div>
-		</form>
-	</div>
-	<form method="dialog" class="modal-backdrop"><button>close</button></form>
-</dialog>
-
-<!-- ── Gallery pick modal ─────────────────────────────────────────────────────── -->
-<dialog bind:this={galleryDialog} class="modal modal-bottom sm:modal-middle" onclose={() => { addingToCarousel = false; }}>
-	<div class="modal-box max-w-xl w-full overflow-hidden">
-		<div class="flex items-center justify-between mb-4">
-			<h3 class="font-semibold">Choose from library</h3>
-			<form method="dialog"><button class="btn btn-soft btn-sm btn-circle">✕</button></form>
-		</div>
-		{#if data.priorUploads.length === 0}
-			<p class="text-sm text-base-content/40">No images in library yet.</p>
-		{:else}
-			<div class="grid grid-cols-3 sm:grid-cols-4 gap-3 max-h-[60dvh] overflow-y-auto overflow-x-hidden">
-				{#each data.priorUploads as img}
-					<button
-						type="button"
-						onclick={() => pickFromGallery(img.url)}
-						class="group relative overflow-hidden rounded-box border-2 transition min-w-0
-							{!addingToCarousel && postType === 'story' ? 'aspect-9/16' : 'aspect-square'}
-							{(addingToCarousel ? carouselUrls.includes(img.url) : uploadedUrl === img.url) ? 'border-primary' : 'border-transparent hover:border-base-300'}"
-					>
-						<img src={img.url} alt="" class="h-full w-full object-cover transition group-hover:scale-105" />
-						{#if addingToCarousel ? carouselUrls.includes(img.url) : uploadedUrl === img.url}
-							<span class="absolute inset-0 bg-primary/20 flex items-center justify-center">
-								<svg class="h-6 w-6 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-							</span>
-						{/if}
-						<span class="absolute bottom-0 inset-x-0 bg-black/60 px-1.5 py-1 opacity-0 group-hover:opacity-100 transition">
-							<span class="text-white text-xs truncate block">{img.name}</span>
-						</span>
-					</button>
-				{/each}
-			</div>
-		{/if}
-	</div>
-	<form method="dialog" class="modal-backdrop"><button>close</button></form>
-</dialog>
-
-<!-- ── Edit caption modal ─────────────────────────────────────────────────────── -->
-<dialog bind:this={editCaptionDialog} class="modal modal-bottom sm:modal-middle">
-	<div class="modal-box max-w-sm">
-		<h3 class="font-semibold mb-4">Edit caption</h3>
-		<form
-			method="POST"
-			action="?/editCaption"
-			use:enhance={() => {
-				editingCaption = true;
-				return async ({ result, update }) => {
-					editingCaption = false;
-					if (result.type === 'failure') {
-						editCaptionError = (result.data as { error?: string })?.error ?? 'Failed to save caption.';
-					} else {
-						editCaptionError = '';
-						editCaptionDialog?.close();
-					}
-					await update();
-				};
-			}}
-			class="flex flex-col gap-4"
-		>
-			<input type="hidden" name="post_id" value={editCaptionPostId} />
-			<fieldset class="fieldset">
-				<legend class="fieldset-legend">Caption</legend>
-				<textarea
-					name="caption"
-					bind:value={editCaptionValue}
-					rows="8"
-					placeholder="Write your caption…"
-					class="textarea w-full"
-				></textarea>
-			</fieldset>
-			{#if editCaptionError}
-				<div role="alert" class="alert alert-error alert-soft text-sm">{editCaptionError}</div>
-			{/if}
-			<div class="flex gap-2">
-				<button type="submit" disabled={editingCaption} class="btn btn-primary flex-1">
-					{#if editingCaption}<span class="loading loading-spinner loading-sm"></span>{/if}
-					{editingCaption ? 'Saving…' : 'Save caption'}
-				</button>
-				<button type="button" onclick={() => editCaptionDialog?.close()} class="btn btn-outline flex-1">Cancel</button>
-			</div>
-		</form>
-	</div>
-	<form method="dialog" class="modal-backdrop"><button>close</button></form>
-</dialog>
-
-<!-- ── View caption modal (history) ──────────────────────────────────────────── -->
-<dialog bind:this={viewCaptionDialog} class="modal modal-bottom sm:modal-middle">
-	<div class="modal-box max-w-sm">
-		<h3 class="font-semibold mb-3">Caption</h3>
-		<p class="text-sm text-base-content/80 whitespace-pre-line leading-relaxed">{viewCaptionText}</p>
-		<div class="modal-action mt-4 gap-2">
-			<button class="btn btn-outline btn-sm" onclick={copyViewCaption}>
-				{viewCaptionCopied ? 'Copied!' : 'Copy caption'}
-			</button>
-			<button class="btn btn-sm" onclick={() => viewCaptionDialog?.close()}>Close</button>
-		</div>
-	</div>
-	<form method="dialog" class="modal-backdrop"><button>close</button></form>
-</dialog>
+<RescheduleModal bind:this={rescheduleModal} {minDatetime} />
+<GalleryPickModal bind:this={galleryModal} uploads={data.priorUploads} onpick={handleGalleryPick} />
+<EditCaptionModal bind:this={editCaptionModal} />
+<ViewCaptionModal bind:this={viewCaptionModal} />
 
 <!-- ── Main content ───────────────────────────────────────────────────────────── -->
 <div class="grid gap-8 lg:grid-cols-2">
@@ -701,6 +487,7 @@
 								tagImageIndex = 0;
 								captionHistory = [];
 								customTagInput = '';
+								scheduledFor = defaultScheduleTime();
 								if (fileInput) fileInput.value = '';
 							}
 							await update();
@@ -793,7 +580,7 @@
 									{#if data.priorUploads.length > 0}
 										<button
 											type="button"
-											onclick={() => { addingToCarousel = true; galleryDialog?.showModal(); }}
+											onclick={() => galleryModal?.open({ mode: 'carousel', carouselUrls })}
 											class="btn btn-sm border border-dashed border-base-300 gap-1"
 										>
 											<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
@@ -811,7 +598,6 @@
 							>Preview carousel</button>
 						{/if}
 
-						<!-- For carousel: first image goes in media_url for thumbnail, all urls in carousel_items -->
 						<input type="hidden" name="media_url" value={carouselUrls[0] ?? ''} />
 						<input type="hidden" name="carousel_items" value={JSON.stringify(carouselUrls)} />
 						<input type="hidden" name="thumbnail_url" value="" />
@@ -841,21 +627,9 @@
 										</span>
 									{/if}
 									<div class="flex flex-wrap gap-1.5 mt-0.5">
-										<button
-											type="button"
-											onclick={openFormPreview}
-											class="btn btn-soft btn-xs"
-										>Preview</button>
-										<button
-											type="button"
-											onclick={editCurrentImage}
-											class="btn btn-soft btn-xs"
-										>Edit image</button>
-										<button
-											type="button"
-											onclick={() => textOverlayModal?.openWithUrl(uploadedUrl)}
-											class="btn btn-soft btn-xs"
-										>Add text</button>
+										<button type="button" onclick={openFormPreview} class="btn btn-soft btn-xs">Preview</button>
+										<button type="button" onclick={editCurrentImage} class="btn btn-soft btn-xs">Edit image</button>
+										<button type="button" onclick={() => textOverlayModal?.openWithUrl(uploadedUrl)} class="btn btn-soft btn-xs">Add text</button>
 									</div>
 								</div>
 							</div>
@@ -885,7 +659,7 @@
 									{/each}
 									<button
 										type="button"
-										onclick={() => { addingToCarousel = false; galleryDialog?.showModal(); }}
+										onclick={() => galleryModal?.open({ mode: 'single', postType: postType === 'story' ? 'story' : 'feed', currentUrl: uploadedUrl })}
 										class="btn btn-outline btn-sm gap-1"
 									>
 										<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -992,7 +766,6 @@
 							<p class="label">Tag people <span class="font-normal text-base-content/40">(optional)</span></p>
 
 							{#if postType === 'carousel' && carouselUrls.length > 0}
-								<!-- Image strip: pick which image to tag -->
 								<div class="flex flex-wrap gap-1.5">
 									{#each carouselUrls as url, i}
 										<button
@@ -1013,7 +786,6 @@
 								<p class="text-xs text-base-content/50">Tagging image {tagImageIndex + 1}</p>
 							{/if}
 
-							<!-- Existing tags -->
 							{#if postType === 'carousel'}
 								{@const allCarouselTags = Object.entries(carouselTagMap).flatMap(([idx, tags]) => tags.map(t => ({ tag: t, idx: +idx })))}
 								{#if allCarouselTags.length > 0}
@@ -1120,208 +892,16 @@
 
 	<!-- Queue + History -->
 	<section>
-		<div class="card bg-base-100 overflow-hidden">
-			<!-- Tab bar -->
-			<div class="flex gap-5 px-6 pt-5 border-b border-base-200">
-				<button
-					type="button"
-					onclick={() => (queueTab = 'upcoming')}
-					class="pb-3 text-sm font-semibold border-b-2 -mb-px transition-colors
-						{queueTab === 'upcoming'
-							? 'border-primary text-base-content'
-							: 'border-transparent text-base-content/40 hover:text-base-content/70'}"
-				>
-					Upcoming{data.queue.length > 0 ? ` (${data.queue.length})` : ''}
-				</button>
-				<button
-					type="button"
-					onclick={() => (queueTab = 'history')}
-					class="pb-3 text-sm font-semibold border-b-2 -mb-px transition-colors
-						{queueTab === 'history'
-							? 'border-primary text-base-content'
-							: 'border-transparent text-base-content/40 hover:text-base-content/70'}"
-				>
-					History
-				</button>
-			</div>
-
-			<div class="p-6 flex flex-col gap-4">
-				{#if queueTab === 'upcoming'}
-					{#if form?.cancelled}
-						<div role="alert" class="alert alert-success alert-soft text-sm">Post cancelled.</div>
-					{/if}
-					{#if form?.rescheduled}
-						<div role="alert" class="alert alert-success alert-soft text-sm">Post rescheduled.</div>
-					{/if}
-					{#if form?.captionEdited}
-						<div role="alert" class="alert alert-success alert-soft text-sm">Caption updated.</div>
-					{/if}
-
-					{#if data.queue.length === 0}
-						<p class="text-sm text-base-content/40">
-							Nothing scheduled yet.{#if data.history.length > 0}
-								{' '}<button
-									type="button"
-									onclick={() => (queueTab = 'history')}
-									class="underline underline-offset-2 hover:text-base-content/60 transition-colors"
-								>View recent history</button>
-							{/if}
-						</p>
-					{:else}
-						<ul class="list">
-							{#each data.queue as post}
-								<li class="list-row items-start py-3">
-									<!-- Thumbnail -->
-									<img
-										src={post.thumbnailUrl ?? post.mediaUrl}
-										alt=""
-										class="h-11 w-11 rounded-box object-cover shrink-0 mt-0.5"
-									/>
-									<!-- Info + actions -->
-									<div class="list-col-grow min-w-0">
-										<div class="flex flex-wrap items-center gap-1.5 mb-1">
-											<span class="badge badge-ghost badge-xs capitalize">{post.type}</span>
-											{#if post.status === 'publishing'}
-												<span class="badge badge-info badge-soft badge-xs">
-													<span class="loading loading-ring loading-xs"></span>
-													publishing
-												</span>
-											{/if}
-											<span class="text-xs font-medium text-base-content/80">{relativeTime(post.scheduledFor)}</span>
-											<span class="text-xs text-base-content/40">
-												{new Date(post.scheduledFor).toLocaleString(undefined, {
-													weekday: 'short', month: 'short', day: 'numeric',
-													hour: '2-digit', minute: '2-digit'
-												})}
-											</span>
-										</div>
-										{#if post.caption}
-											<p class="text-xs text-base-content/50 leading-snug mb-1.5 line-clamp-2">{post.caption}</p>
-										{/if}
-										{#if post.status === 'pending'}
-											<div class="flex flex-wrap items-center gap-1 mt-0.5">
-												<button
-													type="button"
-													onclick={() => openQueueItemPreview(post)}
-													class="btn btn-xs"
-												>Preview</button>
-												{#if post.type === 'feed' || post.type === 'carousel'}
-													<button
-														type="button"
-														onclick={() => openEditCaption(post.id, post.caption)}
-														class="btn btn-xs"
-													>Caption</button>
-												{/if}
-												<button
-													type="button"
-													onclick={() => openReschedule(post.id, post.scheduledFor)}
-													class="btn btn-xs"
-												>Reschedule</button>
-												<form
-													method="POST"
-													action="?/cancel"
-													use:enhance={() => {
-														cancelling = post.id;
-														return async ({ update }) => {
-															cancelling = null;
-															await update();
-														};
-													}}
-												>
-													<input type="hidden" name="post_id" value={post.id} />
-													<button
-														type="submit"
-														disabled={cancelling === post.id}
-														class="btn btn-xs btn-error btn-soft"
-														onclick={(e) => { if (!confirm('Cancel this scheduled post?')) e.preventDefault(); }}
-													>
-														{#if cancelling === post.id}
-															<span class="loading loading-spinner loading-xs"></span>
-														{/if}
-														Cancel
-													</button>
-												</form>
-											</div>
-										{/if}
-									</div>
-								</li>
-							{/each}
-						</ul>
-					{/if}
-				{:else}
-					{#if data.history.length === 0}
-						<p class="text-sm text-base-content/40">No recent post history.</p>
-					{:else}
-						<ul class="flex flex-col divide-y divide-base-200 -mx-6 -mt-4">
-							{#each data.history as post}
-								<li
-									class="flex items-start gap-3 px-6 py-3.5 {post.caption ? 'cursor-pointer hover:bg-base-200/50 transition-colors' : ''}"
-									onclick={() => { if (post.caption) openViewCaption(post.caption); }}
-								>
-									<img
-										src={post.thumbnailUrl ?? post.mediaUrl}
-										alt=""
-										class="h-11 w-11 rounded-box object-cover shrink-0 mt-0.5"
-									/>
-									<div class="min-w-0 flex-1">
-										<div class="flex flex-wrap items-center gap-1.5 mb-0.5">
-											{#if post.status === 'published'}
-												<span class="badge badge-success badge-soft badge-xs">published</span>
-											{:else if post.status === 'failed'}
-												<span class="badge badge-error badge-soft badge-xs">failed</span>
-											{:else}
-												<span class="badge badge-ghost badge-xs">cancelled</span>
-											{/if}
-											<span class="badge badge-ghost badge-xs capitalize">{post.type}</span>
-											<span class="text-xs text-base-content/40">
-												{relativeTime(post.publishedAt ?? post.scheduledFor)}
-											</span>
-										</div>
-										{#if post.caption}
-											<p class="text-xs text-base-content/50 line-clamp-1">{post.caption}</p>
-										{/if}
-										{#if post.errorMessage && post.status === 'failed'}
-											<p class="text-xs text-error line-clamp-1 mt-0.5">{post.errorMessage}</p>
-										{/if}
-										{#if post.status === 'failed'}
-											<form
-												method="POST"
-												action="?/retry"
-												use:enhance={() => {
-													retrying = post.id;
-													return async ({ update }) => {
-														retrying = null;
-														await update();
-													};
-												}}
-												onclick={(e) => e.stopPropagation()}
-												class="mt-1.5"
-											>
-												<input type="hidden" name="post_id" value={post.id} />
-												<button
-													type="submit"
-													disabled={retrying === post.id}
-													class="btn btn-xs btn-outline"
-												>
-													{#if retrying === post.id}
-														<span class="loading loading-spinner loading-xs"></span>
-													{/if}
-													Try again
-												</button>
-											</form>
-										{/if}
-									</div>
-								</li>
-							{/each}
-						</ul>
-						<a
-							href="/accounts/{data.account.id}/history"
-							class="text-xs text-base-content/40 hover:text-base-content/70 transition-colors self-start"
-						>View full history →</a>
-					{/if}
-				{/if}
-			</div>
-		</div>
+		<PostQueuePanel
+			queue={data.queue}
+			history={data.history}
+			accountId={data.account.id}
+			{form}
+			onOpenPreview={openQueueItemPreview}
+			onOpenEditCaption={(id, cap) => editCaptionModal?.open(id, cap)}
+			onOpenReschedule={(id, scheduledFor) => rescheduleModal?.open(id, scheduledFor)}
+			onOpenViewCaption={(cap) => viewCaptionModal?.open(cap)}
+		/>
 	</section>
 </div>
 

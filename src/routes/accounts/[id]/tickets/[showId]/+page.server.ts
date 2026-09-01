@@ -1,3 +1,16 @@
+/**
+ * +page.server.ts — /accounts/[id]/tickets/[showId]
+ * Ticket detail for one show on a given date. Loads the latest snapshot for the
+ * selected date, historical stats (avg/best/worst sold across past dates), and
+ * the adjacent date list for navigation. Applies cache headers: 1h for past dates,
+ * 60s for today and future dates.
+ *
+ * SvelteKit concepts:
+ *   load()        — reads parent() for canAccessTickets; ?date= selects the snapshot
+ *                   date (defaults to today); setHeaders() controls Cache-Control
+ *   parent()      — inherits canAccessTickets from the account layout load
+ *   setHeaders()  — sets Cache-Control for CDN/browser caching of ticket data
+ */
 import { error } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { shows, ticketSnapshots } from '$lib/server/db/schema';

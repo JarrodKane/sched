@@ -1,3 +1,16 @@
+<!--
+  +page.svelte — /accounts/[id]/lineups/calendar
+  Monthly calendar grid (Monday-anchored). Each day cell shows coloured pills for
+  lineups happening that day. Clicking a pill navigates to the lineup's detail page.
+  One colour is assigned per show by cycling through 6 palette options.
+
+  Svelte features:
+    $derived.by  — calendarCells: builds the full grid array (leading blank cells +
+                   day objects + trailing blank cells) from the month data
+    $props()     — receives data (lineupsByDate, year, month, shows)
+    — no local $state; all display is derived from server data + URL params
+-->
+
 <script lang="ts">
 	import type { PageData } from './$types';
 
@@ -127,14 +140,13 @@
 								{@const palette = showPalette.get(lineup.showId) ?? PALETTES[0]}
 								<a
 									href="/accounts/{data.accountMeta.id}/lineups/{lineup.id}"
-									class="block text-xs px-1.5 py-0.5 rounded transition truncate {palette}"
+									class="block text-xs px-1.5 py-0.5 rounded transition {palette}"
 									title="{show?.name ?? ''} · {lineup.entryCount} acts"
 								>
-									<span class="truncate">{show?.name ?? '–'}</span>
 									{#if show?.actsPerShow}
-										<span class="opacity-50 ml-1 tabular-nums">{lineup.entryCount}/{show.actsPerShow}</span>
+										<span class="tabular-nums font-medium">{lineup.entryCount}/{show.actsPerShow}</span>
 									{:else}
-										<span class="opacity-50 ml-1 tabular-nums">{lineup.entryCount}</span>
+										<span class="tabular-nums font-medium">{lineup.entryCount} {lineup.entryCount === 1 ? 'act' : 'acts'}</span>
 									{/if}
 								</a>
 							{/each}

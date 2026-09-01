@@ -1,3 +1,17 @@
+/**
+ * +layout.server.ts — /accounts/[id]
+ * Account layout load. Verifies the user has access to this account via
+ * user_account_access, loads the account's metadata, and exposes per-asset
+ * permission flags to all child pages.
+ *
+ * SvelteKit concepts:
+ *   load()     — runs before every /accounts/[id]/* page; returns
+ *                { accountMeta, canAccessSocial, canAccessTickets, canAccessLineups }
+ *                which child loads read via await parent()
+ *   parent()   — reads session + profile from the root layout load
+ *   error()    — throws 403 if the user has no access row for this account
+ *   redirect() — sends unauthenticated users to /login
+ */
 import { error, redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { socialAccounts } from '$lib/server/db/schema';

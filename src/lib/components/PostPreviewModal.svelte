@@ -1,3 +1,22 @@
+<!--
+  PostPreviewModal.svelte
+  Instagram-style post preview modal. Supports single images and carousels
+  (swipe or arrow key to navigate slides). Optionally shows a feed/story toggle.
+
+  Svelte features:
+    $state         — isOpen, currentIndex, images[], type, accountLabel, showTypeToggle
+    $derived       — imageUrl (current slide URL), isCarousel (images.length > 1)
+    ontouchstart / ontouchend — touch swipe detection for mobile carousel navigation
+
+  Exported methods (call via bind:this):
+    open(opts: OpenOpts) — opens the modal; opts.url is the single image,
+                           opts.urls[] enables carousel mode
+
+  Props:
+    accountLabel     string   — displayed as the account name in the preview header
+    showTypeToggle?  boolean  — if true, renders a feed/story tab (default: false)
+-->
+
 <script lang="ts">
 	interface OpenOpts {
 		url: string;

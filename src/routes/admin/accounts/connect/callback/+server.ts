@@ -1,3 +1,17 @@
+/**
+ * +server.ts — /admin/accounts/connect/callback
+ * Instagram OAuth callback. Verifies the CSRF state cookie, exchanges the auth
+ * code for a short-lived token, extends it to a long-lived token (~60 days via
+ * ig_exchange_token), fetches the IG account info (id, username), then either
+ * creates a new social_accounts row or updates an existing one (matched by the
+ * account UUID embedded in state, or falling back to ig_business_id). Redirects
+ * back to /admin/accounts with a ?message or ?error param.
+ *
+ * SvelteKit concepts:
+ *   RequestHandler (GET) — plain endpoint; always redirects; no body returned
+ *   cookies.get/delete() — reads and immediately clears the CSRF state cookie
+ *   redirect()           — navigates to /admin/accounts on both success and error
+ */
 import { redirect } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { db } from '$lib/server/db';

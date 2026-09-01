@@ -1,3 +1,28 @@
+/**
+ * +page.server.ts — /accounts/[id]
+ * Main schedule page for one account. The largest server file in the app.
+ *
+ * load() behaviour:
+ *   - Without social access: returns minimal data (queue snapshot + ticket info)
+ *     so the page can still show a useful read-only overview
+ *   - With social access: loads the full post queue, Supabase Storage media
+ *     library, caption snippets, hashtag tags, and 30 days of post history
+ *
+ * Actions:
+ *   schedule     — create a new scheduled_posts row (feed, story, or carousel)
+ *   retry        — re-queue a failed post (resets status to 'pending')
+ *   cancel       — soft-cancel a pending post
+ *   editCaption  — update the caption of a pending post
+ *   reschedule   — change the scheduled_for datetime of a pending post
+ *   publishNow   — schedule a post for right now (scheduledFor = new Date()) so
+ *                  the Edge Function picks it up within 60 seconds
+ *
+ * SvelteKit concepts:
+ *   load()     — reads parent() for accountMeta + access flags; queries Drizzle
+ *   actions    — six named POST handlers; each re-checks access before mutating
+ *   fail()     — returns 4xx with an error payload the page reads as `form`
+ *   parent()   — inherits accountMeta and canAccess* from the account layout load
+ */
 import { error, fail, redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { users, socialAccounts, scheduledPosts, captionSnippets, tagSnippets, shows, ticketSnapshots } from '$lib/server/db/schema';
@@ -274,7 +299,8 @@ export const actions: Actions = {
 		}
 
 		const scheduledDate = new Date(scheduledFor);
-		if (isNaN(scheduledDate.getTime()) || scheduledDate <= new Date()) {
+		const twoMinutesAgo = new Date(Date.now() - 2 * 60_000);
+		if (isNaN(scheduledDate.getTime()) || scheduledDate < twoMinutesAgo) {
 			return fail(400, { error: 'New time must be in the future.' });
 		}
 

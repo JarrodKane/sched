@@ -1,3 +1,19 @@
+/**
+ * +page.server.ts — /accounts/[id]/media
+ * Media library page. Lists all files in the account's Supabase Storage folder,
+ * annotated with inUse (referenced by a pending post) and hasBeenPosted (ever
+ * used in a published post) flags so the UI can lock files that are in use.
+ *
+ * Actions:
+ *   delete     — delete a single file (blocked if inUse)
+ *   deleteMany — delete multiple selected files; silently skips locked files
+ *
+ * SvelteKit concepts:
+ *   load()   — reads parent() for canAccessSocial; lists Supabase Storage via
+ *              supabaseAdmin then cross-references scheduled_posts for lock status
+ *   actions  — two named actions; re-verify access before deleting
+ *   fail()   — returns 4xx with an error string
+ */
 import { error, fail, redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { users, scheduledPosts } from '$lib/server/db/schema';

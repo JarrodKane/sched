@@ -1,3 +1,22 @@
+/**
+ * +page.server.ts — /accounts/[id]/lineups/[lineupId]
+ * Single lineup detail page. Loads the lineup + its parent show + all entries,
+ * left-joining the people table to pull through each person's photo and Instagram.
+ *
+ * Actions:
+ *   addEntry          — insert a new entry (position-aware; shifts sort orders)
+ *   updateEntry       — change one field: status, role, or notes
+ *   removeEntry       — delete an entry (verifies it belongs to this account)
+ *   moveEntry         — swap sort order with the adjacent non-MC entry (up/down)
+ *   updateLineupNotes — save freeform notes on the lineup row
+ *   deleteLineup      — delete the lineup and redirect back to the lineups index
+ *
+ * SvelteKit concepts:
+ *   load()     — reads parent() for canAccessLineups; left-joins people for photos
+ *   actions    — six named actions; each re-checks access via canAccessAsset()
+ *   redirect() — deleteLineup redirects to /accounts/[id]/lineups after deletion
+ *   fail()     — returns 4xx with an error payload
+ */
 import { error, fail, redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { lineups, lineupEntries, shows, people, users } from '$lib/server/db/schema';
@@ -131,7 +150,7 @@ export const actions: Actions = {
 		await db
 			.update(lineupEntries)
 			.set(setValues)
-			.where(eq(lineupEntries.id, id));
+			.where(and(eq(lineupEntries.id, id), eq(lineupEntries.lineupId, params.lineupId)));
 
 		return { updated: true };
 	},
@@ -143,7 +162,7 @@ export const actions: Actions = {
 		const id = (form.get('id') as string)?.trim();
 		if (!id) return fail(400, { error: 'Missing entry ID.' });
 
-		await db.delete(lineupEntries).where(eq(lineupEntries.id, id));
+		await db.delete(lineupEntries).where(and(eq(lineupEntries.id, id), eq(lineupEntries.lineupId, params.lineupId)));
 		return { removed: true };
 	},
 
@@ -181,6 +200,14 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const notes = (form.get('notes') as string)?.trim() || null;
 
+		const [owned] = await db
+			.select({ id: lineups.id })
+			.from(lineups)
+			.innerJoin(shows, and(eq(lineups.showId, shows.id), eq(shows.accountId, params.id)))
+			.where(eq(lineups.id, params.lineupId))
+			.limit(1);
+		if (!owned) return fail(403, { error: 'Access denied' });
+
 		await db
 			.update(lineups)
 			.set({ notes })
@@ -191,6 +218,14 @@ export const actions: Actions = {
 
 	deleteLineup: async ({ params, locals }) => {
 		if (!await checkLineupAccess(locals, params.id)) return fail(403, { error: 'Access denied' });
+
+		const [owned] = await db
+			.select({ id: lineups.id })
+			.from(lineups)
+			.innerJoin(shows, and(eq(lineups.showId, shows.id), eq(shows.accountId, params.id)))
+			.where(eq(lineups.id, params.lineupId))
+			.limit(1);
+		if (!owned) return fail(403, { error: 'Access denied' });
 
 		await db.delete(lineups).where(eq(lineups.id, params.lineupId));
 

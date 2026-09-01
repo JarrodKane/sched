@@ -1,3 +1,19 @@
+<!--
+  +page.svelte — /admin/users
+  User management page. Lists users with their account access. Non-admin users get
+  a per-account checkbox grid (social / tickets / lineups); admins see a "full access"
+  label. A create-user form sits at the bottom.
+
+  Svelte features:
+    $state    — checkedAccounts: Record<userId, Set<accountId>> tracking which
+                account checkboxes are ticked; assetState: Record<userId__accountId,
+                {social, tickets, lineups}> for the three sub-permission checkboxes
+    $props()  — receives data (users with access, accounts[]) and form (action results)
+    use:enhance — on setAccess form; rebuilds checkedAccounts/assetState from the
+                  fresh data after the server responds (reset: false preserves form)
+    bind:checked — used on asset sub-checkboxes to keep assetState reactive
+-->
+
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import type { ActionData, PageData } from './$types';
@@ -92,6 +108,9 @@
 					</div>
 
 					<!-- Account access with per-asset permissions -->
+					{#if user.isAdmin}
+						<p class="text-xs text-base-content/40 italic">Admin — has full access to all accounts</p>
+					{:else}
 					<form method="POST" action="?/setAccess" use:enhance={() => async ({ update }) => {
 						await update({ reset: false });
 						checkedAccounts = buildChecked();
@@ -156,6 +175,7 @@
 							</button>
 						</div>
 					</form>
+					{/if}
 				</div>
 			</div>
 		{/each}

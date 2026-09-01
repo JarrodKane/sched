@@ -1,3 +1,18 @@
+<!--
+  +page.svelte — /accounts/[id]/tickets/[showId]
+  Ticket detail for one show on one date. Shows the total sold count as a large
+  headline number, a fill progress bar, a breakdown by ticket type, and a
+  collapsible platform breakdown (Humanitix vs Eventbrite). Historical stats
+  (avg/best/worst sold) are displayed beneath.
+
+  Svelte features:
+    $state       — platformExpanded (controls the platform breakdown collapsible)
+    $derived.by  — mergedTypes: combines Humanitix and Eventbrite ticket types into
+                   a unified list keyed by normalised name
+    $props()     — receives data (snapshot, stats, dates, show)
+    page         — from $app/state; used to build prev/next date navigation URLs
+-->
+
 <script lang="ts">
 	import { page } from '$app/state';
 	import type { PageData } from './$types';

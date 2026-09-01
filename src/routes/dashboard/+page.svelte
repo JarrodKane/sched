@@ -1,3 +1,14 @@
+<!--
+  +page.svelte — /dashboard
+  Dashboard. Shows all accounts the logged-in user has access to as cards, each
+  displaying the account name, platform label, and a "N scheduled" badge when
+  there are pending or publishing posts.
+
+  Svelte features:
+    $props() — receives data (accounts[] with pendingCount per account)
+    — no local $state; the page is entirely driven by server data
+-->
+
 <script lang="ts">
 	import type { PageData } from './$types';
 

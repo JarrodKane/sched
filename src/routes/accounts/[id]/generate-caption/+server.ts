@@ -1,3 +1,19 @@
+/**
+ * +server.ts — /accounts/[id]/generate-caption
+ * POST endpoint that generates an Instagram caption via the Groq API (LLaMA model).
+ * Builds a prompt from the account's AI instructions, enabled caption snippets,
+ * enabled tag shortcuts, and the last 10 published captions for style context.
+ *
+ * Two caption styles, chosen by the caller:
+ *   'event'  — structured prompt for upcoming show announcements
+ *   'recap'  — polish/rewrite prompt for post-show recap captions
+ *
+ * SvelteKit concepts:
+ *   RequestHandler (POST) — plain JSON endpoint; returns { caption } on success
+ *                           or { message } with a 4xx/5xx on failure
+ *   json()   — from @sveltejs/kit; wraps the response object
+ *   error()  — throws HTTP errors for missing params or access denied
+ */
 import { json, error } from '@sveltejs/kit';
 import { GROQ_API_KEY } from '$env/static/private';
 import { db } from '$lib/server/db';

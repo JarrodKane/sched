@@ -1,3 +1,17 @@
+/**
+ * +page.server.ts — /dashboard
+ * Dashboard load. Fetches the accounts the logged-in user has access to, along
+ * with each account's pending post count (for the "N scheduled" badge on each card).
+ *
+ * Admins see all accounts; non-admins only see accounts they have a
+ * user_account_access row for.
+ *
+ * SvelteKit concepts:
+ *   load()    — reads parent() for the user's profile; queries Drizzle for accounts
+ *               and pending counts (groupBy accountId); returns accounts[]
+ *   parent()  — inherits profile from the root layout load
+ *   redirect()— redirects to /login if profile is somehow null
+ */
 import { redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { socialAccounts, userAccountAccess, scheduledPosts } from '$lib/server/db/schema';

@@ -220,12 +220,18 @@ Deno.serve(async () => {
 			continue;
 		}
 
-		// Mark as publishing to prevent double-publish if function runs again before this finishes
-		await supabase
+		// Mark as publishing; guard against double-publish if two function instances overlap
+		const { data: marked } = await supabase
 			.from('scheduled_posts')
 			.update({ status: 'publishing' })
 			.eq('id', post.id)
-			.eq('status', 'pending'); // guard: only update if still pending
+			.eq('status', 'pending')
+			.select('id');
+
+		if (!marked || marked.length === 0) {
+			console.log(`Post ${post.id} already claimed by another instance — skipping`);
+			continue;
+		}
 
 		try {
 			await publishToInstagram(account, post);

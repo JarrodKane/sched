@@ -1,3 +1,22 @@
+<!--
+  +page.svelte — /admin/people
+  People directory. Searchable list with photo thumbnails, name, and Instagram link.
+  Admins can add people, inline-edit, and delete. Photos are uploaded via a shared
+  CropModal bound to the active person; after cropping, the URL is saved via
+  PATCH /api/people/[id]/photo. A lightbox lets any user preview and download photos.
+
+  Svelte features:
+    $state       — search, editingId, showAddForm, addNameInput ref,
+                   people (local $state copy for optimistic photo URL updates),
+                   cropModal ref, cropPersonId, fileInputEl ref,
+                   addPhotoUrl, addPhotoTempId, isAddingNewPerson,
+                   previewUrl, previewName
+    $effect      — re-syncs the local people copy when data.people changes
+    $derived     — filtered: people list filtered by the search query
+    $props()     — receives data (people[], isAdmin) and form (action results)
+    use:enhance  — on add and update forms; resets/closes the inline form on success
+-->
+
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import CropModal from '$lib/components/CropModal.svelte';
@@ -100,6 +119,9 @@
 	// Photo preview lightbox
 	let previewUrl = $state<string | null>(null);
 	let previewName = $state('');
+	let lightboxLoaded = $state(false);
+
+	$effect(() => { if (previewUrl) lightboxLoaded = false; });
 
 	function openPreview(url: string, name: string) {
 		previewUrl = url;
@@ -136,7 +158,14 @@
 		onclick={() => previewUrl = null}
 	>
 		<div class="relative max-w-lg w-full" onclick={(e) => e.stopPropagation()}>
-			<img src={previewUrl} alt={previewName} class="w-full rounded-2xl shadow-2xl object-contain max-h-[80vh]" />
+			<div class="relative w-full rounded-2xl overflow-hidden {lightboxLoaded ? '' : 'skeleton min-h-64'}">
+				<img
+					src={previewUrl}
+					alt={previewName}
+					class="w-full shadow-2xl object-contain max-h-[80vh] transition-opacity duration-200 {lightboxLoaded ? 'opacity-100' : 'opacity-0'}"
+					onload={() => lightboxLoaded = true}
+				/>
+			</div>
 			<p class="text-white/70 text-sm text-center mt-3">{previewName}</p>
 			<div class="flex justify-center gap-2 mt-2">
 				<button
@@ -193,7 +222,17 @@
 					title="Add photo"
 				>
 					{#if addPhotoUrl}
-						<img src={thumbUrl(addPhotoUrl, 112)} alt="Preview" class="w-full h-full object-cover" />
+						<div class="relative w-full h-full skeleton">
+							<img
+								src={thumbUrl(addPhotoUrl, 112)}
+								alt="Preview"
+								class="w-full h-full object-cover opacity-0 transition-opacity duration-200"
+								onload={(e) => {
+									e.currentTarget.classList.remove('opacity-0');
+									e.currentTarget.parentElement?.classList.remove('skeleton');
+								}}
+							/>
+						</div>
 					{:else}
 						<div class="w-full h-full flex flex-col items-center justify-center gap-0.5">
 							<svg class="h-4 w-4 text-base-content/30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
@@ -262,7 +301,17 @@
 									title={person.photoUrl ? 'Change photo' : 'Add photo'}
 								>
 									{#if person.photoUrl}
-										<img src={thumbUrl(person.photoUrl, 128)} alt={person.name} class="w-full h-full object-cover" />
+										<div class="relative w-full h-full skeleton">
+											<img
+												src={thumbUrl(person.photoUrl, 128)}
+												alt={person.name}
+												class="w-full h-full object-cover opacity-0 transition-opacity duration-200"
+												onload={(e) => {
+													e.currentTarget.classList.remove('opacity-0');
+													e.currentTarget.parentElement?.classList.remove('skeleton');
+												}}
+											/>
+										</div>
 									{:else}
 										<div class="w-full h-full flex flex-col items-center justify-center gap-1">
 											<svg class="h-5 w-5 text-base-content/25" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
@@ -309,7 +358,17 @@
 									class="w-full h-full hover:opacity-75 transition-opacity"
 									title="Preview photo"
 								>
-									<img src={thumbUrl(person.photoUrl)} alt={person.name} class="w-full h-full object-cover" />
+									<div class="relative w-full h-full skeleton">
+										<img
+											src={thumbUrl(person.photoUrl)}
+											alt={person.name}
+											class="w-full h-full object-cover opacity-0 transition-opacity duration-200"
+											onload={(e) => {
+												e.currentTarget.classList.remove('opacity-0');
+												e.currentTarget.parentElement?.classList.remove('skeleton');
+											}}
+										/>
+									</div>
 								</button>
 							{:else}
 								<div class="w-full h-full flex items-center justify-center">

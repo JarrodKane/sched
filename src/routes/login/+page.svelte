@@ -1,3 +1,16 @@
+<!--
+  +page.svelte — /login
+  Login page. Renders a centred card with email and password fields. Tracks a
+  loading state to disable the submit button and show a spinner while the
+  Supabase Auth call is in flight.
+
+  Svelte features:
+    $state    — loading (true while the login action is in flight)
+    $props()  — receives form (action result: { error? })
+    use:enhance — intercepts submit: sets loading = true, then resets it in the
+                  callback so the button re-enables if the login fails
+-->
+
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import type { ActionData } from './$types';

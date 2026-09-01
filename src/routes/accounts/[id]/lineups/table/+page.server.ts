@@ -1,8 +1,36 @@
+/**
+ * +page.server.ts — /accounts/[id]/lineups/table
+ * Paginated table view of all lineups for a show (15 per page). Loads each
+ * lineup's full entry list in one batch query (in-memory join) so every LineupCard
+ * can render without additional round trips.
+ *
+ * Actions:
+ *   createLineup  — create a new lineup for a given show + date
+ *   removeEntry   — delete an entry (verifies ownership via show → account chain)
+ *   updateEntry   — change an entry's status, role, or notes
+ *   addEntry      — add a new act (position-based sort order; MC pinned first)
+ *   moveEntry     — swap sort order with an adjacent non-MC entry (up/down)
+ *
+ * SvelteKit concepts:
+ *   load()    — reads parent() for canAccessLineups; ?show= selects the active show,
+ *               ?page= controls pagination
+ *   actions   — five named actions; each re-verifies access before mutating
+ *   fail()    — returns 4xx with an error string the page reads as createError
+ */
 import { error, fail } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { shows, lineups, lineupEntries, people } from '$lib/server/db/schema';
+import { shows, lineups, lineupEntries, people, users } from '$lib/server/db/schema';
 import { eq, asc, desc, inArray, sql, and, ne } from 'drizzle-orm';
+import { canAccessAsset } from '$lib/server/access';
 import type { PageServerLoad, Actions } from './$types';
+
+async function checkLineupAccess(locals: App.Locals, accountId: string) {
+	const { user } = await locals.safeGetSession();
+	if (!user) return false;
+	const [profile] = await db.select().from(users).where(eq(users.id, user.id)).limit(1);
+	if (!profile) return false;
+	return canAccessAsset(profile.id, accountId, profile.isAdmin, 'lineups');
+}
 
 const PAGE_SIZE = 15;
 
@@ -53,6 +81,7 @@ export const load: PageServerLoad = async ({ params, url, parent }) => {
 		status: string;
 		notes: string | null;
 		instagram: string | null;
+		photoUrl: string | null;
 	};
 	type TableLineup = { id: string; showDate: string; notes: string | null; entries: Entry[] };
 	let tableLineups: TableLineup[] = [];
@@ -85,7 +114,8 @@ export const load: PageServerLoad = async ({ params, url, parent }) => {
 };
 
 export const actions: Actions = {
-	createLineup: async ({ request, params }) => {
+	createLineup: async ({ request, params, locals }) => {
+		if (!await checkLineupAccess(locals, params.id)) return fail(403, { error: 'Access denied' });
 		const fd = await request.formData();
 		const showId = fd.get('show_id') as string;
 		const showDate = fd.get('show_date') as string;
@@ -110,7 +140,8 @@ export const actions: Actions = {
 		return { success: true };
 	},
 
-	removeEntry: async ({ request, params }) => {
+	removeEntry: async ({ request, params, locals }) => {
+		if (!await checkLineupAccess(locals, params.id)) return fail(403, { error: 'Access denied' });
 		const fd = await request.formData();
 		const entryId = fd.get('entry_id') as string;
 
@@ -127,7 +158,8 @@ export const actions: Actions = {
 		return { success: true };
 	},
 
-	updateEntry: async ({ request, params }) => {
+	updateEntry: async ({ request, params, locals }) => {
+		if (!await checkLineupAccess(locals, params.id)) return fail(403, { error: 'Access denied' });
 		const fd = await request.formData();
 		const entryId = fd.get('entry_id') as string;
 		const field = fd.get('field') as string;
@@ -153,7 +185,8 @@ export const actions: Actions = {
 		return { success: true };
 	},
 
-	addEntry: async ({ request, params }) => {
+	addEntry: async ({ request, params, locals }) => {
+		if (!await checkLineupAccess(locals, params.id)) return fail(403, { error: 'Access denied' });
 		const fd = await request.formData();
 		const lineupId = fd.get('lineup_id') as string;
 		const name = ((fd.get('name') as string) ?? '').trim();
@@ -203,7 +236,8 @@ export const actions: Actions = {
 		return { success: true };
 	},
 
-	moveEntry: async ({ request, params }) => {
+	moveEntry: async ({ request, params, locals }) => {
+		if (!await checkLineupAccess(locals, params.id)) return fail(403, { error: 'Access denied' });
 		const fd = await request.formData();
 		const entryId = fd.get('entry_id') as string;
 		const lineupId = fd.get('lineup_id') as string;

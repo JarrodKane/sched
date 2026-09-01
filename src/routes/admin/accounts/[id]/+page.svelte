@@ -1,3 +1,15 @@
+<!--
+  +page.svelte — /admin/accounts/[id]
+  Admin page for managing one account's ticket shows. Lists existing shows with
+  inline edit forms (toggled open per-row) and an "add show" form at the bottom.
+
+  Svelte features:
+    $state    — editingShowId (which show's edit form is expanded, or null)
+    $props()  — receives data (account, shows) and form (action result)
+    use:enhance — on all four action forms; the updateShow enhance callback reads
+                  result.type and closes the inline edit on 'success'
+-->
+
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import type { ActionData, PageData } from './$types';

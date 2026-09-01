@@ -1,3 +1,17 @@
+/**
+ * +page.server.ts — /accounts/[id]/history
+ * Loads the last 30 days of published, failed, and cancelled posts for one account.
+ * Only accessible to users with social access.
+ *
+ * Actions:
+ *   retry   — re-queues a failed post (resets status to 'pending')
+ *
+ * SvelteKit concepts:
+ *   load()    — reads parent() for accountMeta + canAccessSocial; queries Drizzle
+ *   actions   — one named action (retry); re-checks access before mutating
+ *   fail()    — returns 4xx with an error string
+ *   parent()  — inherits canAccessSocial from the account layout load
+ */
 import { redirect, fail } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { users, scheduledPosts } from '$lib/server/db/schema';

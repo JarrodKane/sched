@@ -1,3 +1,17 @@
+<!--
+  +page.svelte — /accounts/[id]/tickets
+  Ticket week overview. Shows week navigation (prev/next + calendar-jump), a list
+  of shows with their sold count and fill bar for the selected week, and a
+  collapsible weekly history table with prev/next pagination.
+
+  Svelte features:
+    $state   — historyExpanded (shows/hides the weekly history section),
+               calendarValue (date input for jumping to a specific week)
+    $props() — receives data (weekShows, historyWeeks, historyPage, historyTotalPages,
+               weekStart, shows)
+    goto()   — navigates to the selected week when the calendar input changes
+-->
+
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import type { PageData } from './$types';

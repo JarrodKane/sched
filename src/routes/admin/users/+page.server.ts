@@ -1,3 +1,23 @@
+/**
+ * +page.server.ts — /admin/users
+ * User management page. Lists all users with their current account access rows.
+ * Admins can create users (via Supabase Auth admin API + profile insert), delete
+ * users (from Auth + DB), and set per-account permissions with granular
+ * social / tickets / lineups flags per account.
+ *
+ * Actions:
+ *   create    — creates a Supabase Auth user (auto email-confirmed) + inserts a
+ *               users profile row
+ *   delete    — removes the user from Supabase Auth and the users table
+ *   setAccess — replaces all user_account_access rows for a user with the
+ *               submitted checkbox selections (social/tickets/lineups per account)
+ *
+ * SvelteKit concepts:
+ *   load()    — no explicit auth check (layout guard covers it); loads all three
+ *               tables (users, social_accounts, user_account_access) in parallel
+ *   actions   — three named actions; each calls requireAdmin() before mutating
+ *   fail()    — returns 4xx with createError / deleteError / accessError strings
+ */
 import { fail } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { users, socialAccounts, userAccountAccess } from '$lib/server/db/schema';

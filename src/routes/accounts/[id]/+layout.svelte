@@ -1,3 +1,15 @@
+<!--
+  +layout.svelte — /accounts/[id]
+  Account section shell. Renders the account header (name, back link, settings
+  gear) and a horizontal tab bar (Schedule, Media, Tickets, Lineups). Tabs are
+  shown or hidden based on the canAccess* flags from the layout server load.
+
+  SvelteKit / Svelte features:
+    $props()             — receives data (accountMeta + canAccess flags) and children
+    {@render children()} — Svelte 5 slot replacement; renders the active sub-page
+    page                 — from $app/state; used to mark the active tab
+-->
+
 <script lang="ts">
 	import { page } from '$app/state';
 	import type { LayoutData } from './$types';
@@ -51,7 +63,7 @@
 		</a>
 	{/if}
 	{#if data.canAccessLineups}
-		<a role="tab" href="{base}/lineups" class="tab shrink-0 {isTab(`${base}/lineups`) ? 'tab-active' : ''}">
+		<a role="tab" href="{base}/lineups/table" class="tab shrink-0 {isTab(`${base}/lineups`) ? 'tab-active' : ''}">
 			Lineups
 		</a>
 	{/if}

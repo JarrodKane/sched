@@ -1,3 +1,25 @@
+/**
+ * +page.server.ts — /accounts/[id]/settings
+ * Account settings page. Loads the account's location tag, AI caption instructions,
+ * caption snippets, and tag shortcuts.
+ *
+ * Actions:
+ *   updateLocation       — save the Facebook Place ID + display name
+ *   updateAiInstructions — save the account-level AI prompt instructions
+ *   addSnippet           — create a new caption snippet
+ *   updateSnippet        — update label/text of an existing snippet
+ *   deleteSnippet        — delete a snippet
+ *   toggleSnippetAi      — flip the useInAi flag on a snippet
+ *   addTag               — create a new tag shortcut
+ *   updateTag            — update label/username/category of a tag
+ *   deleteTag            — delete a tag
+ *   toggleTagAi          — flip the useInAi flag on a tag
+ *
+ * SvelteKit concepts:
+ *   load()   — reads parent() for accountMeta + canAccessSocial
+ *   actions  — ten named actions; each re-checks access before mutating
+ *   fail()   — returns 4xx with field-specific error keys
+ */
 import { fail, redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { users, socialAccounts, captionSnippets, tagSnippets } from '$lib/server/db/schema';
