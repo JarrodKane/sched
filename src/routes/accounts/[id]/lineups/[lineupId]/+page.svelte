@@ -26,6 +26,21 @@
 	let localEntries = $state([...data.entries]);
 	$effect(() => { localEntries = [...data.entries]; });
 
+	async function downloadPersonPhoto(url: string, name: string) {
+		try {
+			const res = await fetch(url);
+			const blob = await res.blob();
+			const blobUrl = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = blobUrl;
+			a.download = `${name.toLowerCase().replace(/\s+/g, '-')}.jpg`;
+			a.click();
+			URL.revokeObjectURL(blobUrl);
+		} catch {
+			window.open(url, '_blank');
+		}
+	}
+
 	let editingId = $state<string | null>(null);
 	let showAddForm = $state(false);
 	let addError = $state<string | null>(null);
@@ -296,6 +311,18 @@
 						{STATUS_LABELS[entry.status] ?? entry.status}
 					</button>
 				</form>
+
+				<!-- Download photo (if person has one) -->
+				{#if entry.photoUrl}
+					<button
+						type="button"
+						onclick={() => downloadPersonPhoto(entry.photoUrl!, entry.name)}
+						class="btn btn-xs btn-soft btn-square shrink-0"
+						title="Download {entry.name}'s photo"
+					>
+						<svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+					</button>
+				{/if}
 
 				<!-- Edit toggle -->
 				<button

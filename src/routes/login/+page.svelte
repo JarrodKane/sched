@@ -6,14 +6,14 @@
 	let loading = $state(false);
 </script>
 
-<svelte:head><title>Sign in — IG Scheduler</title></svelte:head>
+<svelte:head><title>Sign in — Sched</title></svelte:head>
 
 <div class="flex min-h-[80vh] items-center justify-center">
 	<div class="card bg-base-100 w-full max-w-sm shadow-xl">
 		<div class="card-body gap-5">
 			<div class="flex items-center gap-2 mb-1">
 					<span class="text-primary font-black text-2xl leading-none">●</span>
-					<h1 class="card-title text-2xl">IG Scheduler</h1>
+					<h1 class="card-title text-2xl">Sched</h1>
 				</div>
 
 			<form

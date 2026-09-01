@@ -39,10 +39,10 @@
 				<ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-50 w-52 p-2 shadow-lg border border-base-300 mt-1">
 					<li class="menu-title text-xs text-base-content/40">{data.profile.name}</li>
 					<li><a href="/dashboard" class={isActive('/dashboard') ? 'menu-active' : ''}>Dashboard</a></li>
+					<li><a href="/admin/people" class={isActive('/admin/people') ? 'menu-active' : ''}>People</a></li>
 					{#if data.profile.isAdmin}
 						<li><a href="/admin/accounts" class={isActive('/admin/accounts') ? 'menu-active' : ''}>Accounts</a></li>
 						<li><a href="/admin/users" class={isActive('/admin/users') ? 'menu-active' : ''}>Users</a></li>
-						<li><a href="/admin/people" class={isActive('/admin/people') ? 'menu-active' : ''}>People</a></li>
 					{/if}
 					<li class="border-t border-base-200 mt-1 pt-1">
 						<form method="POST" action="/login?/logout">
@@ -54,16 +54,16 @@
 
 			<a href="/dashboard" class="flex items-center gap-2 px-1">
 				<span class="text-primary font-black text-xl leading-none">●</span>
-				<span class="font-bold text-sm">IG Scheduler</span>
+				<span class="font-bold text-sm">Sched</span>
 			</a>
 
 			<!-- Desktop: horizontal nav -->
 			<ul class="menu menu-horizontal menu-sm px-0 hidden sm:flex">
 				<li><a href="/dashboard" class={isActive('/dashboard') ? 'menu-active' : ''}>Dashboard</a></li>
+				<li><a href="/admin/people" class={isActive('/admin/people') ? 'menu-active' : ''}>People</a></li>
 				{#if data.profile.isAdmin}
 					<li><a href="/admin/accounts" class={isActive('/admin/accounts') ? 'menu-active' : ''}>Accounts</a></li>
 					<li><a href="/admin/users" class={isActive('/admin/users') ? 'menu-active' : ''}>Users</a></li>
-					<li><a href="/admin/people" class={isActive('/admin/people') ? 'menu-active' : ''}>People</a></li>
 				{/if}
 			</ul>
 		</div>

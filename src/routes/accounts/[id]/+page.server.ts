@@ -1,7 +1,7 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { users, socialAccounts, scheduledPosts, captionSnippets, tagSnippets } from '$lib/server/db/schema';
-import { eq, and, asc, desc, gte, inArray } from 'drizzle-orm';
+import { users, socialAccounts, scheduledPosts, captionSnippets, tagSnippets, shows, ticketSnapshots } from '$lib/server/db/schema';
+import { eq, and, asc, desc, gte, lte, inArray } from 'drizzle-orm';
 import { canAccessAccount, canModifyPost } from '$lib/server/access';
 import { supabaseAdmin } from '$lib/server/supabase-admin';
 import type { Actions, PageServerLoad } from './$types';
@@ -14,18 +14,45 @@ async function getProfile(locals: App.Locals) {
 }
 
 export const load: PageServerLoad = async ({ params, parent }) => {
-	const { profile, canAccessSocial, accountMeta } = await parent();
+	const { profile, canAccessSocial, canAccessTickets, accountMeta } = await parent();
 	if (!profile) redirect(303, '/login');
 
 	// Layout already enforced account access — just load what's needed for each view
 	if (!canAccessSocial) {
-		// Overview: only need the upcoming queue count
-		const queue = await db
-			.select()
-			.from(scheduledPosts)
-			.where(and(eq(scheduledPosts.accountId, params.id), inArray(scheduledPosts.status, ['pending', 'publishing'])))
-			.orderBy(asc(scheduledPosts.scheduledFor));
-		return { account: accountMeta, queue, priorUploads: [], snippets: [], tagSnippets: [], history: [] };
+		const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+		const d = new Date(today + 'T12:00:00');
+		const daysBack = d.getDay() === 0 ? 6 : d.getDay() - 1;
+		d.setDate(d.getDate() - daysBack);
+		const weekStart = d.toISOString().slice(0, 10);
+		const weekEndDate = new Date(d); weekEndDate.setDate(d.getDate() + 6);
+		const weekEnd = weekEndDate.toISOString().slice(0, 10);
+
+		const [queue, accountShows] = await Promise.all([
+			db
+				.select()
+				.from(scheduledPosts)
+				.where(and(eq(scheduledPosts.accountId, params.id), inArray(scheduledPosts.status, ['pending', 'publishing'])))
+				.orderBy(asc(scheduledPosts.scheduledFor)),
+			canAccessTickets
+				? db.select().from(shows).where(and(eq(shows.accountId, params.id), eq(shows.isActive, true))).orderBy(shows.name)
+				: Promise.resolve([])
+		]);
+
+		let ticketShowDates: { id: string; name: string; capacity: number | null; snapshot: typeof ticketSnapshots.$inferSelect }[] = [];
+		if (canAccessTickets && accountShows.length > 0) {
+			const showIds = accountShows.map((s) => s.id);
+			const weekSnaps = await db
+				.select()
+				.from(ticketSnapshots)
+				.where(and(inArray(ticketSnapshots.showId, showIds), gte(ticketSnapshots.showDate, weekStart), lte(ticketSnapshots.showDate, weekEnd)))
+				.orderBy(asc(ticketSnapshots.showDate));
+			ticketShowDates = weekSnaps.flatMap((snap) => {
+				const show = accountShows.find((s) => s.id === snap.showId);
+				return show ? [{ id: show.id, name: show.name, capacity: show.capacity ?? null, snapshot: snap }] : [];
+			});
+		}
+
+		return { account: accountMeta, queue, priorUploads: [], snippets: [], tagSnippets: [], history: [], ticketShowDates, today, weekStart };
 	}
 
 	const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -137,6 +164,30 @@ export const actions: Actions = {
 		});
 
 		return { success: true };
+	},
+
+	retry: async ({ request, locals }) => {
+		const profile = await getProfile(locals);
+		if (!profile) redirect(303, '/login');
+
+		const form = await request.formData();
+		const postId = form.get('post_id') as string;
+		if (!postId) return fail(400, { error: 'Missing post ID.' });
+
+		const allowed = await canModifyPost(profile.id, postId, profile.isAdmin);
+		if (!allowed) return fail(403, { error: 'Access denied' });
+
+		const [post] = await db.select().from(scheduledPosts).where(eq(scheduledPosts.id, postId)).limit(1);
+		if (!post || post.status !== 'failed') {
+			return fail(400, { error: 'Only failed posts can be retried.' });
+		}
+
+		await db
+			.update(scheduledPosts)
+			.set({ status: 'pending', errorMessage: null, scheduledFor: new Date() })
+			.where(eq(scheduledPosts.id, postId));
+
+		return { retried: true };
 	},
 
 	cancel: async ({ request, locals }) => {

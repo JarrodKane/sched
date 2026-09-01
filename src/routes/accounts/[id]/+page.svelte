@@ -122,11 +122,13 @@
 
 	// Reschedule modal
 	let rescheduleDialog = $state<HTMLDialogElement | null>(null);
+	let rescheduleForm = $state<HTMLFormElement | null>(null);
 	let reschedulePostId = $state('');
 	let rescheduleTime = $state('');
 	let rescheduling = $state(false);
 	let rescheduleError = $state('');
 	let cancelling = $state<string | null>(null);
+	let retrying = $state<string | null>(null);
 
 	// Gallery pick modal
 	let galleryDialog = $state<HTMLDialogElement | null>(null);
@@ -181,7 +183,8 @@
 	// ── Helpers ─────────────────────────────────────────────────────────────────
 
 	function relativeTime(date: string | Date): string {
-		const diff = new Date(date).getTime() - Date.now();
+		const d = new Date(date);
+		const diff = d.getTime() - Date.now();
 		const abs = Math.abs(diff);
 		const past = diff < 0;
 		if (abs < 60_000) return past ? 'just now' : 'in less than a minute';
@@ -190,7 +193,8 @@
 		const hours = Math.floor(mins / 60);
 		const remMins = mins % 60;
 		if (hours < 24) return past ? `${hours}h ${remMins}m ago` : `in ${hours}h${remMins > 0 ? ` ${remMins}m` : ''}`;
-		const days = Math.floor(hours / 24);
+		const midnight = (x: Date) => { const c = new Date(x); c.setHours(0, 0, 0, 0); return c; };
+		const days = Math.round(Math.abs(midnight(new Date()).getTime() - midnight(d).getTime()) / 86_400_000);
 		return past ? `${days}d ago` : `in ${days}d`;
 	}
 
@@ -400,38 +404,84 @@
 	});
 </script>
 
-<svelte:head><title>{data.account.label} — IG Scheduler</title></svelte:head>
+<svelte:head><title>{data.account.label} — Sched</title></svelte:head>
 
 {#if !data.canAccessSocial}
 	<!-- Overview for users without Instagram access -->
 	<div class="flex flex-col gap-4">
-		<div class="grid gap-4 sm:grid-cols-2">
-			<!-- Upcoming posts summary -->
-			<div class="card bg-base-100">
-				<div class="card-body gap-1">
-					<p class="text-xs font-medium uppercase tracking-wide text-base-content/40">Instagram posts planned</p>
-					<p class="text-3xl font-bold">{data.queue.length}</p>
-					{#if data.queue.length > 0}
-						<p class="text-sm text-base-content/60 mt-1">
-							Next: {new Date(data.queue[0].scheduledFor).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
-						</p>
-					{:else}
-						<p class="text-sm text-base-content/40 mt-1">Nothing scheduled</p>
-					{/if}
-				</div>
+		<!-- Upcoming posts summary -->
+		<div class="card bg-base-100">
+			<div class="card-body gap-1 py-3">
+				<p class="text-xs font-medium uppercase tracking-wide text-base-content/40">Instagram posts planned</p>
+				<p class="text-3xl font-bold">{data.queue.length}</p>
+				{#if data.queue.length > 0}
+					<p class="text-sm text-base-content/60 mt-1">
+						Next: {new Date(data.queue[0].scheduledFor).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+					</p>
+				{:else}
+					<p class="text-sm text-base-content/40 mt-1">Nothing scheduled</p>
+				{/if}
 			</div>
-
-			{#if data.canAccessTickets}
-				<!-- Tickets shortcut -->
-				<a href="/accounts/{data.account.id}/tickets" class="card bg-base-100 hover:bg-base-200 transition-colors group">
-					<div class="card-body gap-1">
-						<p class="text-xs font-medium uppercase tracking-wide text-base-content/40">Tickets</p>
-						<p class="text-sm font-medium text-base-content/80 mt-1">View upcoming shows &amp; ticket sales</p>
-						<span class="text-xs text-primary mt-1 group-hover:underline">Open tickets →</span>
-					</div>
-				</a>
-			{/if}
 		</div>
+
+		{#if data.canAccessTickets}
+			<!-- Tickets — this week's shows inline -->
+			<div>
+				<div class="flex items-center justify-between mb-3">
+					<p class="text-sm font-semibold">Tickets this week</p>
+					<a href="/accounts/{data.account.id}/tickets" class="text-xs text-primary hover:underline">All weeks →</a>
+				</div>
+				{#if data.ticketShowDates && data.ticketShowDates.length > 0}
+					<div class="flex flex-col gap-3">
+						{#each data.ticketShowDates as item}
+							{@const snap = item.snapshot}
+							{@const cap = item.capacity}
+							{@const p = cap && cap > 0 ? Math.round((snap.totalSold / cap) * 100) : 0}
+							{@const isTonight = snap.showDate === data.today}
+							{@const fillCol = p >= 90 ? 'text-error' : p >= 70 ? 'text-warning' : 'text-primary'}
+							{@const progCol = p >= 90 ? 'progress-error' : p >= 70 ? 'progress-warning' : 'progress-primary'}
+							<a href="/accounts/{data.account.id}/tickets/{item.id}?date={snap.showDate}"
+								class="card bg-base-100 hover:shadow-md hover:-translate-y-0.5 transition-all duration-150 cursor-pointer">
+								<div class="card-body py-4 px-5 gap-3">
+									<div class="flex items-start justify-between gap-4">
+										<div class="min-w-0 flex-1">
+											<p class="font-semibold text-base leading-tight">{item.name}</p>
+											<div class="flex items-center gap-2 mt-1 flex-wrap">
+												{#if isTonight}
+													<span class="badge badge-sm badge-primary badge-soft">Tonight</span>
+												{/if}
+												<span class="text-sm text-base-content/60">
+													{new Date(snap.showDate + 'T12:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}
+												</span>
+											</div>
+										</div>
+										<div class="shrink-0 text-right">
+											<p class="text-3xl font-bold tabular-nums leading-none {cap ? fillCol : 'text-base-content'}">{snap.totalSold}</p>
+											{#if cap}
+												<p class="text-xs text-base-content/40 mt-0.5">of {cap}</p>
+											{:else}
+												<p class="text-xs text-base-content/40 mt-0.5">sold</p>
+											{/if}
+										</div>
+									</div>
+									{#if cap}
+										<div class="flex items-center gap-2">
+											<progress class="progress {progCol} flex-1 h-2" value={p} max="100"></progress>
+											<span class="text-xs font-medium tabular-nums text-base-content/50 w-10 text-right">{p}%</span>
+											<svg class="h-4 w-4 text-base-content/30 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+										</div>
+									{/if}
+								</div>
+							</a>
+						{/each}
+					</div>
+				{:else}
+					<div class="card bg-base-100">
+						<div class="card-body py-4 text-sm text-base-content/40">No shows this week.</div>
+					</div>
+				{/if}
+			</div>
+		{/if}
 	</div>
 {:else}
 
@@ -458,6 +508,7 @@
 	<div class="modal-box max-w-sm">
 		<h3 class="font-semibold mb-4">Reschedule post</h3>
 		<form
+			bind:this={rescheduleForm}
 			method="POST"
 			action="?/reschedule"
 			use:enhance={() => {
@@ -478,24 +529,35 @@
 			<input type="hidden" name="post_id" value={reschedulePostId} />
 			<fieldset class="fieldset">
 				<legend class="fieldset-legend">New date & time</legend>
-				<input
-					type="datetime-local"
-					name="scheduled_for"
-					bind:value={rescheduleTime}
-					min={minDatetime}
-					required
-					class="input w-full"
-				/>
+				<div class="flex gap-2 items-center">
+					<input
+						type="datetime-local"
+						name="scheduled_for"
+						bind:value={rescheduleTime}
+						min={minDatetime}
+						required
+						class="input flex-1 min-w-0"
+					/>
+					<button type="submit" disabled={rescheduling} class="btn btn-primary shrink-0">
+						{#if rescheduling}<span class="loading loading-spinner loading-sm"></span>{/if}
+						{rescheduling ? '…' : 'Reschedule'}
+					</button>
+				</div>
 			</fieldset>
 			{#if rescheduleError}
 				<div role="alert" class="alert alert-error alert-soft text-sm">{rescheduleError}</div>
 			{/if}
 			<div class="flex gap-2">
-				<button type="submit" disabled={rescheduling} class="btn btn-primary flex-1">
-					{#if rescheduling}<span class="loading loading-spinner loading-sm"></span>{/if}
-					{rescheduling ? 'Saving…' : 'Reschedule'}
-				</button>
-				<button type="button" onclick={() => rescheduleDialog?.close()} class="btn btn-outline flex-1">Cancel</button>
+				<button
+					type="button"
+					disabled={rescheduling}
+					onclick={() => {
+						rescheduleTime = new Date(Date.now() + 60_000).toISOString().slice(0, 16);
+						rescheduleForm?.requestSubmit();
+					}}
+					class="btn btn-outline flex-1"
+				>Publish now</button>
+				<button type="button" onclick={() => rescheduleDialog?.close()} class="btn btn-ghost flex-1 text-base-content/50">Cancel</button>
 			</div>
 		</form>
 	</div>
@@ -579,7 +641,7 @@
 					{#if editingCaption}<span class="loading loading-spinner loading-sm"></span>{/if}
 					{editingCaption ? 'Saving…' : 'Save caption'}
 				</button>
-				<button type="button" onclick={() => editCaptionDialog?.close()} class="btn btn-ghost flex-1">Cancel</button>
+				<button type="button" onclick={() => editCaptionDialog?.close()} class="btn btn-outline flex-1">Cancel</button>
 			</div>
 		</form>
 	</div>
@@ -858,27 +920,30 @@
 							></textarea>
 
 							<div class="flex flex-wrap items-center gap-2 mt-1.5">
-								<div class="join">
-									<div class="tooltip tooltip-bottom" data-tip="Promoting an upcoming show — generates a structured caption with venue, date, time and ticket info">
-										<button
-											type="button"
-											onclick={() => captionStyle = 'event'}
-											class="btn btn-xs join-item {captionStyle === 'event' ? 'btn-neutral' : 'btn-outline'}"
-										>Event post</button>
-									</div>
-									<div class="tooltip tooltip-bottom" data-tip="Posting about a past event — polishes your caption without restructuring it into a promotion">
-										<button
-											type="button"
-											onclick={() => captionStyle = 'recap'}
-											class="btn btn-xs join-item {captionStyle === 'recap' ? 'btn-neutral' : 'btn-outline'}"
-										>Recap</button>
+								<div class="flex items-center gap-1.5">
+									<span class="text-xs text-base-content/40">Style:</span>
+									<div class="join">
+										<div class="tooltip tooltip-bottom" data-tip="Promoting an upcoming show — generates a structured caption with venue, date, time and ticket info">
+											<button
+												type="button"
+												onclick={() => captionStyle = 'event'}
+												class="btn btn-xs join-item {captionStyle === 'event' ? 'btn-primary' : ''}"
+											>Event post</button>
+										</div>
+										<div class="tooltip tooltip-bottom" data-tip="Posting about a past event — polishes your caption without restructuring it into a promotion">
+											<button
+												type="button"
+												onclick={() => captionStyle = 'recap'}
+												class="btn btn-xs join-item {captionStyle === 'recap' ? 'btn-primary' : ''}"
+											>Recap</button>
+										</div>
 									</div>
 								</div>
 								<button
 									type="button"
 									onclick={generateCaption}
 									disabled={generatingCaption}
-									class="btn btn-xs btn-outline gap-1"
+									class="btn btn-xs btn-soft btn-primary gap-1"
 								>
 									{#if generatingCaption}
 										<span class="loading loading-spinner loading-xs"></span>
@@ -979,7 +1044,7 @@
 										<button
 											type="button"
 											onclick={() => toggleTag(t.username)}
-											class="btn btn-xs rounded-full {activeTags.includes(t.username) ? 'btn-neutral' : 'btn-ghost border border-base-300'}"
+											class="btn btn-xs rounded-full {activeTags.includes(t.username) ? 'btn-neutral' : 'btn-outline'}"
 										>
 											{activeTags.includes(t.username) ? '✓ ' : ''}{t.label}
 										</button>
@@ -1217,6 +1282,33 @@
 										{/if}
 										{#if post.errorMessage && post.status === 'failed'}
 											<p class="text-xs text-error line-clamp-1 mt-0.5">{post.errorMessage}</p>
+										{/if}
+										{#if post.status === 'failed'}
+											<form
+												method="POST"
+												action="?/retry"
+												use:enhance={() => {
+													retrying = post.id;
+													return async ({ update }) => {
+														retrying = null;
+														await update();
+													};
+												}}
+												onclick={(e) => e.stopPropagation()}
+												class="mt-1.5"
+											>
+												<input type="hidden" name="post_id" value={post.id} />
+												<button
+													type="submit"
+													disabled={retrying === post.id}
+													class="btn btn-xs btn-outline"
+												>
+													{#if retrying === post.id}
+														<span class="loading loading-spinner loading-xs"></span>
+													{/if}
+													Try again
+												</button>
+											</form>
 										{/if}
 									</div>
 								</li>

@@ -130,7 +130,7 @@
 <!-- Date navigation -->
 <div class="flex items-center justify-between gap-2 mb-1">
 	{#if data.prevDate}
-		<a href={dateLink(data.prevDate)} class="btn btn-ghost btn-sm gap-1 text-base-content/50">
+		<a href={dateLink(data.prevDate)} class="btn btn-soft btn-sm gap-1 text-base-content/50">
 			<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
 			{formatShortDate(data.prevDate)}
 		</a>
@@ -143,7 +143,7 @@
 	</p>
 
 	{#if data.nextDate}
-		<a href={dateLink(data.nextDate)} class="btn btn-ghost btn-sm gap-1 text-base-content/50">
+		<a href={dateLink(data.nextDate)} class="btn btn-soft btn-sm gap-1 text-base-content/50">
 			{formatShortDate(data.nextDate)}
 			<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
 		</a>

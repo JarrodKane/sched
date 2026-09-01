@@ -112,6 +112,20 @@
 		await invalidateAll();
 	}
 
+	async function createPersonAndAdd(lineupId: string) {
+		const name = addSearchQuery.trim();
+		if (!name) return;
+		const res = await fetch('/api/people', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+		const json = await res.json();
+		if (json?.person) addSelectedPerson = json.person;
+		await submitAdd(lineupId);
+	}
+
+	const addShowNewPerson = $derived(
+		!!addSearchQuery.trim() && !addSelectedPerson &&
+		!addSearchResults.some(p => p.name.toLowerCase() === addSearchQuery.trim().toLowerCase())
+	);
+
 	// Inline updates
 	async function updateEntry(entryId: string, field: string, value: string) {
 		const fd = new FormData();
@@ -141,10 +155,86 @@
 
 	let copyDoneId = $state<string | null>(null);
 
+	async function downloadPersonPhoto(url: string, name: string) {
+		try {
+			const res = await fetch(url);
+			const blob = await res.blob();
+			const blobUrl = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = blobUrl;
+			a.download = `${name.toLowerCase().replace(/\s+/g, '-')}.jpg`;
+			a.click();
+			URL.revokeObjectURL(blobUrl);
+		} catch {
+			window.open(url, '_blank');
+		}
+	}
+
+	// --- Placeholder logic for weekly/fortnightly shows ---
+
+	function addDaysStr(dateStr: string, n: number): string {
+		const d = new Date(dateStr + 'T12:00:00');
+		d.setDate(d.getDate() + n);
+		return d.toISOString().slice(0, 10);
+	}
+
+	function expectedDatesInRange(rangeStart: string, rangeEnd: string, interval: number, anchor: string): string[] {
+		const start = new Date(rangeStart + 'T12:00:00');
+		const end = new Date(rangeEnd + 'T12:00:00');
+		const cursor = new Date(anchor + 'T12:00:00');
+		// Walk backward until before rangeStart
+		while (cursor >= start) cursor.setDate(cursor.getDate() - interval);
+		// Walk forward into range
+		cursor.setDate(cursor.getDate() + interval);
+		const dates: string[] = [];
+		while (cursor <= end) {
+			dates.push(cursor.toISOString().slice(0, 10));
+			cursor.setDate(cursor.getDate() + interval);
+		}
+		return dates;
+	}
+
+	type LineupItem = { type: 'lineup'; lineup: (typeof data.tableLineups)[number]; date: string };
+	type PlaceholderItem = { type: 'placeholder'; date: string };
+
+	const displayItems = $derived.by((): (LineupItem | PlaceholderItem)[] => {
+		const show = data.selectedShow;
+		const lineups = data.tableLineups;
+		const interval =
+			show?.scheduleType === 'weekly' ? 7 :
+			show?.scheduleType === 'fortnightly' ? 14 : 0;
+
+		const lineupItems: LineupItem[] = lineups.map(l => ({ type: 'lineup', lineup: l, date: l.showDate }));
+
+		if (!interval || lineups.length === 0) return lineupItems;
+
+		// Use oldest lineup as anchor so fortnightly alternating-week pattern is preserved
+		const anchor = lineups[lineups.length - 1].showDate;
+		const oldestDate = anchor;
+		const lookAheadEnd = addDaysStr(data.today, 28);
+
+		const allExpected = expectedDatesInRange(oldestDate, lookAheadEnd, interval, anchor);
+		const existingDates = new Set(lineups.map(l => l.showDate));
+
+		const placeholders: PlaceholderItem[] = allExpected
+			.filter(d => !existingDates.has(d))
+			.map(d => ({ type: 'placeholder', date: d }));
+
+		return [...lineupItems, ...placeholders].sort((a, b) => b.date.localeCompare(a.date));
+	});
+
+	async function createLineupForDate(date: string) {
+		const fd = new FormData();
+		fd.append('show_id', activeId);
+		fd.append('show_date', date);
+		await fetch('?/createLineup', { method: 'POST', body: fd });
+		await invalidateAll();
+	}
+
 	function copyLineup(lineup: (typeof data.tableLineups)[number]) {
 		const showName = data.selectedShow?.name ?? '';
 		const lines: string[] = [`${showName} – ${formatDate(lineup.showDate)}`, ''];
-		const active = lineup.entries.filter((e) => e.status !== 'cancelled');
+		const active = lineup.entries.filter((e) => e.status !== 'cancelled' && e.role !== 'support');
 		const mcs = active.filter((e) => e.role === 'mc');
 		const acts = active.filter((e) => e.role !== 'mc');
 		mcs.forEach((e) => lines.push(`MC: ${e.name}`));
@@ -244,8 +334,8 @@
 		<div class="py-12 text-center text-sm text-base-content/40">No lineups yet for this show.</div>
 	{:else}
 		<div class="flex flex-col gap-6">
-			{#each data.tableLineups as lineup, idx}
-				{#if lineup.showDate < data.today && (idx === 0 || data.tableLineups[idx - 1].showDate >= data.today)}
+			{#each displayItems as item, idx}
+				{#if item.date < data.today && (idx === 0 || displayItems[idx - 1].date >= data.today)}
 					<div class="flex items-center gap-3 py-1">
 						<div class="flex-1 h-px bg-base-content/20"></div>
 						<div class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-base-content/8 border border-base-content/15">
@@ -255,7 +345,21 @@
 						<div class="flex-1 h-px bg-base-content/20"></div>
 					</div>
 				{/if}
-				{@const active = lineup.entries.filter(e => e.status !== 'cancelled')}
+
+				{#if item.type === 'placeholder'}
+					<div class="rounded-2xl border border-dashed border-base-content/20 px-4 py-3 flex items-center justify-between gap-4">
+						<div>
+							<span class="text-sm text-base-content/50">{formatDate(item.date)}</span>
+							<p class="text-xs text-base-content/30 mt-0.5">No lineup created</p>
+						</div>
+						<button onclick={() => createLineupForDate(item.date)} class="btn btn-xs btn-outline gap-1 shrink-0">
+							<svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+							Create lineup
+						</button>
+					</div>
+				{:else}
+				{@const lineup = item.lineup}
+				{@const active = lineup.entries.filter(e => e.status !== 'cancelled' && e.role !== 'support')}
 				{@const cap = data.selectedShow?.actsPerShow}
 				{@const pct = cap && cap > 0 ? Math.round((active.length / cap) * 100) : null}
 				<div class="rounded-2xl bg-base-100 border border-base-200 overflow-hidden shadow-md">
@@ -318,7 +422,7 @@
 										autofocus
 										class="input input-sm w-full"
 									/>
-									{#if addSearchResults.length > 0 && !addSelectedPerson}
+									{#if (addSearchResults.length > 0 || addShowNewPerson) && !addSelectedPerson}
 										<div class="absolute left-0 top-full mt-1.5 bg-base-200 border border-base-content/20 rounded-xl shadow-xl z-30 w-full max-h-48 overflow-y-auto divide-y divide-base-content/8">
 											{#each addSearchResults as person}
 												<button
@@ -333,6 +437,16 @@
 													{/if}
 												</button>
 											{/each}
+											{#if addShowNewPerson}
+												<button
+													type="button"
+													onclick={() => createPersonAndAdd(addingToLineup!)}
+													class="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-primary/10 active:bg-primary/15 text-left transition-colors text-primary"
+												>
+													<svg class="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+													<span class="font-medium text-sm">Create "<span class="font-semibold">{addSearchQuery.trim()}</span>" as new person</span>
+												</button>
+											{/if}
 										</div>
 									{/if}
 								</div>
@@ -374,7 +488,7 @@
 									<tr>
 										<th class="w-14 pr-1">#</th>
 										<th class="w-48 max-w-xs">Name</th>
-										<th class="hidden sm:table-cell w-48">Instagram</th>
+										<th class="w-32 hidden sm:table-cell">Instagram</th>
 										<th class="w-24">Status</th>
 										<th class="hidden md:table-cell">Notes</th>
 										<th class="w-8"></th>
@@ -425,13 +539,19 @@
 												>
 													{ROLE_LABELS[entry.role] ?? entry.role}
 												</button>
+												{#if entry.instagram}
+													<a href={igUrl(entry.instagram)} target="_blank" rel="noopener"
+														class="text-xs text-primary/70 hover:text-primary block truncate sm:hidden mt-0.5"
+														title={igHandle(entry.instagram)}
+													>{igHandle(entry.instagram)}</a>
+												{/if}
 											</td>
 
 											<!-- Instagram -->
-											<td class="hidden sm:table-cell w-48 max-w-48">
+											<td class="w-32 max-w-32 hidden sm:table-cell">
 												{#if entry.instagram}
 													<a href={igUrl(entry.instagram)} target="_blank" rel="noopener"
-														class="text-xs text-primary/70 hover:text-primary transition-colors block truncate max-w-44"
+														class="text-xs text-primary/70 hover:text-primary transition-colors block truncate"
 														title={igHandle(entry.instagram)}>
 														{igHandle(entry.instagram)}
 													</a>
@@ -466,15 +586,26 @@
 												/>
 											</td>
 
-											<!-- Remove -->
-											<td class="w-8">
-												<button
-													onclick={() => removeEntry(entry.id)}
-													class="btn btn-xs btn-outline btn-square w-6 h-6 min-h-0 p-0 border-error/30 text-error hover:bg-error hover:text-error-content hover:border-error"
-													title="Remove act"
-												>
-													<svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-												</button>
+											<!-- Download + Remove -->
+											<td class="w-16">
+												<div class="flex items-center justify-end gap-2">
+													{#if entry.photoUrl}
+														<button
+															onclick={() => downloadPersonPhoto(entry.photoUrl!, entry.name)}
+															class="btn btn-xs btn-outline btn-square w-6 h-6 min-h-0 p-0"
+															title="Download {entry.name}'s photo"
+														>
+															<svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+														</button>
+													{/if}
+													<button
+														onclick={() => removeEntry(entry.id)}
+														class="btn btn-xs btn-outline btn-square w-6 h-6 min-h-0 p-0 border-error/30 text-error hover:bg-error hover:text-error-content hover:border-error"
+														title="Remove act"
+													>
+														<svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+													</button>
+												</div>
 											</td>
 										</tr>
 									{/each}
@@ -483,6 +614,7 @@
 						</div>
 					{/if}
 				</div>
+				{/if}
 			{/each}
 		</div>
 

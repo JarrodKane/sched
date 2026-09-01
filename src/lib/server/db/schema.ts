@@ -107,6 +107,7 @@ export const people = pgTable('people', {
 	id: uuid('id').primaryKey().defaultRandom(),
 	name: text('name').notNull(),
 	instagram: text('instagram'), // handle or full URL
+	photoUrl: text('photo_url'),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
 

@@ -34,11 +34,15 @@
 
 <div role="tablist" class="tabs tabs-border mb-6 overflow-x-auto flex-nowrap -mx-3 px-3 sm:mx-0 sm:px-0">
 	{#if data.canAccessSocial}
-		<a role="tab" href={base} class="tab shrink-0 {isTab(base) && !isTab(`${base}/media`) && !isTab(`${base}/settings`) && !isTab(`${base}/tickets`) ? 'tab-active' : ''}">
+		<a role="tab" href={base} class="tab shrink-0 {isTab(base) && !isTab(`${base}/media`) && !isTab(`${base}/settings`) && !isTab(`${base}/tickets`) && !isTab(`${base}/lineups`) ? 'tab-active' : ''}">
 			Schedule
 		</a>
 		<a role="tab" href="{base}/media" class="tab shrink-0 {isTab(`${base}/media`) ? 'tab-active' : ''}">
 			Media library
+		</a>
+	{:else}
+		<a role="tab" href={base} class="tab shrink-0 {page.url.pathname === base ? 'tab-active' : ''}">
+			Overview
 		</a>
 	{/if}
 	{#if data.canAccessTickets}

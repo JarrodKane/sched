@@ -4,11 +4,12 @@
 
 	interface Props {
 		accountId: string;
+		maxUploadBytes?: number;
 		oncomplete?: (url: string, thumbnailUrl: string | null) => void;
 		oncancel?: () => void;
 	}
 
-	let { accountId, oncomplete, oncancel }: Props = $props();
+	let { accountId, maxUploadBytes = 20 * 1024 * 1024, oncomplete, oncancel }: Props = $props();
 
 	type CropRatio = '9:16' | '4:5' | '1:1' | '1.91:1';
 	type BgType = 'blur' | 'color';
@@ -86,7 +87,8 @@
 			center: false,
 			highlight: false,
 			rotatable: false,
-			scalable: false
+			scalable: false,
+			keyboard: false  // we handle arrow keys ourselves via window listener below
 		});
 		cropperInstance = instance;
 		return () => {
@@ -110,35 +112,46 @@
 	async function composite(outW: number, outH: number): Promise<HTMLCanvasElement> {
 		if (!cropperInstance) throw new Error('Cropper not ready — try again');
 
-		const croppedCanvas = cropperInstance.getCroppedCanvas({
-			width: outW,
-			height: outH,
+		// Get the crop at native source resolution — do NOT pass width/height here, as that
+		// forces Cropper.js to upscale small source images, causing blurriness. We only
+		// downscale when the natural size exceeds the target; never upscale.
+		const naturalCanvas = cropperInstance.getCroppedCanvas({
 			imageSmoothingEnabled: true,
-			imageSmoothingQuality: outW >= 800 ? 'high' : 'medium',
+			imageSmoothingQuality: 'high',
 			fillColor: 'transparent'
 		});
 
+		let w = naturalCanvas.width;
+		let h = naturalCanvas.height;
+		if (w > outW || h > outH) {
+			const scale = Math.min(outW / w, outH / h);
+			w = Math.round(w * scale);
+			h = Math.round(h * scale);
+		}
+
 		const canvas = document.createElement('canvas');
-		canvas.width = outW;
-		canvas.height = outH;
+		canvas.width = w;
+		canvas.height = h;
 		const ctx = canvas.getContext('2d')!;
+		ctx.imageSmoothingEnabled = true;
+		ctx.imageSmoothingQuality = 'high';
 
 		if (bgType === 'blur') {
 			const img = await loadImage(cropObjectUrl);
 			const nw = img.naturalWidth;
 			const nh = img.naturalHeight;
-			const bgScale = Math.max(outW / nw, outH / nh);
+			const bgScale = Math.max(w / nw, h / nh);
 			// Blur radius proportional to output width so it looks the same at any size
-			const blurPx = Math.round(outW / 22);
+			const blurPx = Math.round(w / 22);
 			ctx.filter = `blur(${blurPx}px)`;
-			ctx.drawImage(img, (outW - nw * bgScale) / 2, (outH - nh * bgScale) / 2, nw * bgScale, nh * bgScale);
+			ctx.drawImage(img, (w - nw * bgScale) / 2, (h - nh * bgScale) / 2, nw * bgScale, nh * bgScale);
 			ctx.filter = 'none';
 		} else {
 			ctx.fillStyle = bgColor;
-			ctx.fillRect(0, 0, outW, outH);
+			ctx.fillRect(0, 0, w, h);
 		}
 
-		ctx.drawImage(croppedCanvas, 0, 0);
+		ctx.drawImage(naturalCanvas, 0, 0, w, h);
 		return canvas;
 	}
 
@@ -174,8 +187,28 @@
 		});
 	}
 
-	// Render at half resolution and toggle as an overlay — lets you see the exact
-	// composited output (background + crop) before committing to the upload.
+	// Arrow key nudge — window-level so it works regardless of where focus sits inside the modal.
+	// Active only while the modal is open (cropObjectUrl is truthy).
+	$effect(() => {
+		if (!cropObjectUrl) return;
+
+		function onKeyDown(e: KeyboardEvent) {
+			if (!cropperInstance) return;
+			const tag = (e.target as HTMLElement).tagName;
+			if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+			const step = e.shiftKey ? 10 : 1;
+			switch (e.key) {
+				case 'ArrowLeft':  cropperInstance.move(-step, 0); e.preventDefault(); break;
+				case 'ArrowRight': cropperInstance.move(step, 0);  e.preventDefault(); break;
+				case 'ArrowUp':    cropperInstance.move(0, -step); e.preventDefault(); break;
+				case 'ArrowDown':  cropperInstance.move(0, step);  e.preventDefault(); break;
+			}
+		}
+
+		window.addEventListener('keydown', onKeyDown);
+		return () => window.removeEventListener('keydown', onKeyDown);
+	});
+
 	async function togglePreview() {
 		if (showBgPreview) {
 			showBgPreview = false;
@@ -236,20 +269,10 @@
 		uploadError = '';
 	}
 
-	const MAX_UPLOAD = 2.8 * 1024 * 1024; // stay comfortably under the server's 3 MB limit
-
 	async function compressBlob(canvas: HTMLCanvasElement): Promise<Blob> {
-		let blob = await new Promise<Blob>((resolve) =>
-			canvas.toBlob((b) => resolve(b!), 'image/jpeg', 0.92)
+		return new Promise<Blob>((resolve) =>
+			canvas.toBlob((b) => resolve(b!), 'image/jpeg', 0.95)
 		);
-		// Iteratively lower quality until under the upload limit
-		for (const q of [0.82, 0.72, 0.62]) {
-			if (blob.size <= MAX_UPLOAD) break;
-			blob = await new Promise<Blob>((resolve) =>
-				canvas.toBlob((b) => resolve(b!), 'image/jpeg', q)
-			);
-		}
-		return blob;
 	}
 
 	async function doCrop(useOriginal = false) {
@@ -275,22 +298,8 @@
 					thumbCanvas.toBlob((b) => resolve(b!), 'image/jpeg', 0.55)
 				);
 				thumbnailFile = new File([thumbBlob], name.replace('_cropped.jpg', '_thumb.jpg'), { type: 'image/jpeg' });
-			} else if (rawFile.size > MAX_UPLOAD) {
-				// "Skip — use original" was clicked but the raw file is too large; compress via canvas
-				const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-					const el = new Image();
-					const url = URL.createObjectURL(rawFile);
-					el.onload = () => { URL.revokeObjectURL(url); resolve(el); };
-					el.onerror = reject;
-					el.src = url;
-				});
-				const canvas = document.createElement('canvas');
-				canvas.width = img.naturalWidth;
-				canvas.height = img.naturalHeight;
-				canvas.getContext('2d')!.drawImage(img, 0, 0);
-				const blob = await compressBlob(canvas);
-				const name = rawFile.name.replace(/\.\w+$/, '') + '.jpg';
-				fileToUpload = new File([blob], name, { type: 'image/jpeg' });
+			} else if (rawFile.size > maxUploadBytes) {
+				throw new Error(`File too large — max ${Math.round(maxUploadBytes / 1024 / 1024)} MB`);
 			}
 
 			const fd = new FormData();
@@ -413,7 +422,7 @@
 
 		<!-- Viewport controls -->
 		<div class="flex items-center justify-between gap-3 flex-wrap">
-			<span class="text-xs text-base-content/40">Drag to move · scroll or pinch to zoom</span>
+			<span class="text-xs text-base-content/40">Drag to move · scroll to zoom · arrow keys to nudge (shift = 10px)</span>
 			<div class="flex gap-1 flex-wrap">
 				<button
 					type="button"

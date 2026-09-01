@@ -49,7 +49,8 @@ export const load: PageServerLoad = async ({ params, parent }) => {
 			notes: lineupEntries.notes,
 			sortOrder: lineupEntries.sortOrder,
 			createdAt: lineupEntries.createdAt,
-			instagram: people.instagram
+			instagram: people.instagram,
+			photoUrl: people.photoUrl
 		})
 		.from(lineupEntries)
 		.leftJoin(people, eq(lineupEntries.personId, people.id))

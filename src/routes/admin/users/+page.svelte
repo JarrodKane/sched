@@ -48,7 +48,7 @@
 	}
 </script>
 
-<svelte:head><title>Users — IG Scheduler Admin</title></svelte:head>
+<svelte:head><title>Users — Sched Admin</title></svelte:head>
 
 <h1 class="mb-6 text-xl font-semibold">Users</h1>
 

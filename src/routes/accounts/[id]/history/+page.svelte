@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
 	import type { PageData } from './$types';
 	import { relativeTimePast } from '$lib/format';
 
@@ -39,6 +40,7 @@
 	let brokenImages = $state(new Set<string>());
 	let expandedPosts = $state(new Set<string>());
 	let copiedPost = $state<string | null>(null);
+	let retrying = $state<string | null>(null);
 
 	function thumbSrc(post: Post) {
 		return post.thumbnailUrl ?? post.mediaUrl;
@@ -58,7 +60,7 @@
 	}
 </script>
 
-<svelte:head><title>{data.account.label} History — IG Scheduler</title></svelte:head>
+<svelte:head><title>{data.account.label} History — Sched</title></svelte:head>
 
 {#if data.posts.length === 0}
 	<div class="flex flex-col items-center justify-center py-20 text-center">
@@ -142,9 +144,31 @@
 										{/if}
 									{/if}
 
-									<!-- Error -->
-									{#if post.errorMessage && post.status === 'failed'}
-										<p class="text-xs text-error mt-1 leading-snug">{post.errorMessage}</p>
+									<!-- Error + retry -->
+									{#if post.status === 'failed'}
+										{#if post.errorMessage}
+											<p class="text-xs text-error mt-1 leading-snug">{post.errorMessage}</p>
+										{/if}
+										<form
+											method="POST"
+											action="?/retry"
+											use:enhance={() => {
+												retrying = post.id;
+												return async ({ update }) => {
+													retrying = null;
+													await update();
+												};
+											}}
+											class="mt-2"
+										>
+											<input type="hidden" name="post_id" value={post.id} />
+											<button type="submit" disabled={retrying === post.id} class="btn btn-xs btn-outline">
+												{#if retrying === post.id}
+													<span class="loading loading-spinner loading-xs"></span>
+												{/if}
+												Try again
+											</button>
+										</form>
 									{/if}
 								</div>
 							</div>

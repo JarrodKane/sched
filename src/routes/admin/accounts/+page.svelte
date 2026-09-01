@@ -31,9 +31,9 @@
 	}
 </script>
 
-<svelte:head><title>Accounts — IG Scheduler Admin</title></svelte:head>
+<svelte:head><title>Accounts — Sched Admin</title></svelte:head>
 
-<div class="mb-6 flex items-center justify-between">
+<div class="mb-6 flex items-center justify-between flex-wrap gap-2">
 	<h1 class="text-xl font-semibold">Instagram accounts</h1>
 	<a
 		href="/admin/accounts/connect"
@@ -145,7 +145,7 @@
 				class="input input-bordered w-full mb-4"
 			/>
 			<div class="modal-action mt-0">
-				<button type="button" class="btn btn-ghost" onclick={closeDelete}>Cancel</button>
+				<button type="button" class="btn btn-outline" onclick={closeDelete}>Cancel</button>
 				<form method="POST" action="?/remove" use:enhance={() => { closeDelete(); }}>
 					<input type="hidden" name="id" value={deleteTarget.id} />
 					<input type="hidden" name="confirm" value={confirmText} />

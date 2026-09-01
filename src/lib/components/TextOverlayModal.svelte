@@ -257,7 +257,7 @@
 		<div class="flex items-center justify-between">
 			<h3 class="font-semibold">Add text overlay</h3>
 			<form method="dialog">
-				<button class="btn btn-ghost btn-sm btn-square" aria-label="Close" disabled={uploading}>
+				<button class="btn btn-soft btn-sm btn-square" aria-label="Close" disabled={uploading}>
 					<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
 				</button>
 			</form>

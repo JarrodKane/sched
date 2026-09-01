@@ -36,7 +36,7 @@
 	let newTagUsername = $state('');
 </script>
 
-<svelte:head><title>{data.accountMeta.label} Settings — IG Scheduler</title></svelte:head>
+<svelte:head><title>{data.accountMeta.label} Settings — Sched</title></svelte:head>
 
 <div class="flex flex-col gap-8 max-w-2xl">
 
@@ -200,7 +200,7 @@
 											{#if savingSnippetId === snippet.id}<span class="loading loading-spinner loading-xs"></span>{/if}
 											Save
 										</button>
-										<button type="button" onclick={() => (editingSnippetId = null)} class="btn btn-ghost btn-xs">Cancel</button>
+										<button type="button" onclick={() => (editingSnippetId = null)} class="btn btn-outline btn-xs">Cancel</button>
 									</div>
 								</form>
 							{:else}
@@ -227,7 +227,7 @@
 												type="submit"
 												disabled={togglingSnippetAiId === snippet.id}
 												title={snippet.useInAi ? 'Used by AI — click to disable' : 'Not used by AI — click to enable'}
-												class="btn btn-xs gap-1 {snippet.useInAi ? 'btn-success' : 'btn-ghost border border-base-300 opacity-40'}"
+												class="btn btn-xs gap-1 {snippet.useInAi ? 'btn-success' : 'btn-outline opacity-40'}"
 											>
 												{#if togglingSnippetAiId === snippet.id}
 													<span class="loading loading-spinner loading-xs"></span>
@@ -240,7 +240,7 @@
 										<button
 											type="button"
 											onclick={() => { editingSnippetId = snippet.id; editingTagId = null; }}
-											class="btn btn-ghost btn-xs"
+											class="btn btn-outline btn-xs"
 										>Edit</button>
 										<form
 											method="POST"
@@ -258,7 +258,7 @@
 												type="submit"
 												disabled={deletingSnippetId === snippet.id}
 												onclick={(e) => { if (!confirm('Delete this snippet?')) e.preventDefault(); }}
-												class="btn btn-ghost btn-xs text-error"
+												class="btn btn-outline btn-xs text-error"
 											>
 												{#if deletingSnippetId === snippet.id}
 													<span class="loading loading-spinner loading-xs"></span>
@@ -387,7 +387,7 @@
 											{#if savingTagId === tag.id}<span class="loading loading-spinner loading-xs"></span>{/if}
 											Save
 										</button>
-										<button type="button" onclick={() => (editingTagId = null)} class="btn btn-ghost btn-xs">Cancel</button>
+										<button type="button" onclick={() => (editingTagId = null)} class="btn btn-outline btn-xs">Cancel</button>
 									</div>
 								</form>
 							{:else}
@@ -419,7 +419,7 @@
 												type="submit"
 												disabled={togglingTagAiId === tag.id}
 												title={tag.useInAi ? 'Used by AI — click to disable' : 'Not used by AI — click to enable'}
-												class="btn btn-xs gap-1 {tag.useInAi ? 'btn-success' : 'btn-ghost border border-base-300 opacity-40'}"
+												class="btn btn-xs gap-1 {tag.useInAi ? 'btn-success' : 'btn-outline opacity-40'}"
 											>
 												{#if togglingTagAiId === tag.id}
 													<span class="loading loading-spinner loading-xs"></span>
@@ -432,7 +432,7 @@
 										<button
 											type="button"
 											onclick={() => { editingTagId = tag.id; editingSnippetId = null; }}
-											class="btn btn-ghost btn-xs"
+											class="btn btn-outline btn-xs"
 										>Edit</button>
 										<form
 											method="POST"
@@ -450,7 +450,7 @@
 												type="submit"
 												disabled={deletingTagId === tag.id}
 												onclick={(e) => { if (!confirm('Delete this tag shortcut?')) e.preventDefault(); }}
-												class="btn btn-ghost btn-xs text-error"
+												class="btn btn-outline btn-xs text-error"
 											>
 												{#if deletingTagId === tag.id}
 													<span class="loading loading-spinner loading-xs"></span>

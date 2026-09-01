@@ -3,7 +3,7 @@ import { supabaseAdmin } from '$lib/server/supabase-admin';
 import type { RequestHandler } from './$types';
 
 const BUCKET = 'media';
-const MAX_SIZE_BYTES = 3 * 1024 * 1024; // 3 MB (client compresses before reaching this)
+const MAX_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const { user } = await locals.safeGetSession();
@@ -16,7 +16,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	if (!file || !accountId) error(400, 'Missing file or account_id');
 	if (!file.type.startsWith('image/')) error(400, 'Only image files are supported');
-	if (file.size > MAX_SIZE_BYTES) error(400, 'File too large (max 3 MB)');
+	if (file.size > MAX_SIZE_BYTES) error(400, 'File too large (max 20 MB)');
 
 	const timestamp = Date.now();
 	const ext = file.name.split('.').pop() ?? 'jpg';

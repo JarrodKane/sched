@@ -82,7 +82,20 @@ async function publishToInstagram(
 		if (account.location_id) params.location_id = account.location_id;
 	}
 
-	const containerId = await createMediaContainer(account.ig_business_id, account.access_token, params);
+	let containerId: string;
+	try {
+		containerId = await createMediaContainer(account.ig_business_id, account.access_token, params);
+	} catch (err) {
+		const msg = err instanceof Error ? err.message : '';
+		if (params.location_id && msg.toLowerCase().includes('location')) {
+			// Invalid location ID — retry without it so the post still goes out
+			console.warn(`Location ID "${params.location_id}" rejected by Instagram — retrying without location`);
+			delete params.location_id;
+			containerId = await createMediaContainer(account.ig_business_id, account.access_token, params);
+		} else {
+			throw err;
+		}
+	}
 	await waitForContainerReady(containerId, account.access_token);
 
 	const publishBody = new URLSearchParams({ creation_id: containerId, access_token: account.access_token });

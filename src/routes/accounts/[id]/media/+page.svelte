@@ -117,7 +117,7 @@
 	}
 </script>
 
-<svelte:head><title>{data.account.label} Media — IG Scheduler</title></svelte:head>
+<svelte:head><title>{data.account.label} Media — Sched</title></svelte:head>
 
 <!-- Crop modal -->
 <CropModal
@@ -146,25 +146,25 @@
 				<button
 					type="button"
 					onclick={() => { filter = 'all'; }}
-					class="btn btn-xs join-item {filter === 'all' ? 'btn-neutral' : 'btn-ghost'}"
+					class="btn btn-xs join-item {filter === 'all' ? 'btn-neutral' : 'btn-outline'}"
 				>All ({data.files.length})</button>
 				<button
 					type="button"
 					onclick={() => { filter = 'posted'; }}
-					class="btn btn-xs join-item {filter === 'posted' ? 'btn-neutral' : 'btn-ghost'}"
+					class="btn btn-xs join-item {filter === 'posted' ? 'btn-neutral' : 'btn-outline'}"
 				>Posted ({data.files.filter(f => f.hasBeenPosted).length})</button>
 			</div>
 			<button
 				type="button"
 				onclick={toggleSelectMode}
-				class="btn btn-xs btn-ghost"
+				class="btn btn-xs btn-outline"
 			>{selectMode ? 'Done' : 'Select'}</button>
 		</div>
 
 		{#if selectMode}
 			<div class="flex flex-wrap items-center gap-2 pl-0.5">
 				<span class="text-xs text-base-content/50">{selected.size} selected</span>
-				<button type="button" onclick={toggleSelectAll} class="btn btn-xs btn-ghost">
+				<button type="button" onclick={toggleSelectAll} class="btn btn-xs btn-outline">
 					{allVisibleSelected ? 'Deselect all' : 'Select all'}
 				</button>
 				{#if selectedDeletable.length > 0}
@@ -281,18 +281,18 @@
 								<button
 									type="button"
 									onclick={() => openPreview(file.url)}
-									class="btn btn-ghost btn-xs"
+									class="btn btn-soft btn-xs"
 								>Preview</button>
 								<button
 									type="button"
 									onclick={() => cropModal?.openWithUrl(file.url)}
-									class="btn btn-ghost btn-xs"
+									class="btn btn-soft btn-xs"
 								>Edit</button>
 								<button
 									type="button"
 									onclick={() => downloadImage(file.url, file.name)}
 									disabled={downloading === file.url}
-									class="btn btn-ghost btn-xs"
+									class="btn btn-soft btn-xs"
 								>{downloading === file.url ? '…' : 'Download'}</button>
 							</div>
 						{/if}

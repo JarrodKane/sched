@@ -61,7 +61,7 @@
 	const isCurrentWeek = $derived(data.weekStart === getMondayOf(data.today));
 </script>
 
-<svelte:head><title>Tickets — IG Scheduler</title></svelte:head>
+<svelte:head><title>Tickets — Sched</title></svelte:head>
 
 <!-- Week navigation -->
 <div class="flex items-center justify-between gap-2 mb-5">

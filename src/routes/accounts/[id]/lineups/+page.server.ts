@@ -55,7 +55,7 @@ export const load: PageServerLoad = async ({ params, url, parent }) => {
 				id: lineups.id,
 				showId: lineups.showId,
 				showDate: lineups.showDate,
-				entryCount: sql<number>`count(case when ${lineupEntries.status} != 'cancelled' then 1 end)::int`
+				entryCount: sql<number>`count(case when ${lineupEntries.status} != 'cancelled' and ${lineupEntries.role} != 'support' then 1 end)::int`
 			})
 			.from(lineups)
 			.leftJoin(lineupEntries, eq(lineupEntries.lineupId, lineups.id))

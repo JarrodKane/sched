@@ -14,7 +14,7 @@ export const load: PageServerLoad = async ({ params, url, parent }) => {
 	const today = now.toLocaleDateString('en-CA', { timeZone: 'Australia/Melbourne' });
 
 	const accountShows = await db
-		.select({ id: shows.id, name: shows.name, actsPerShow: shows.actsPerShow })
+		.select({ id: shows.id, name: shows.name, actsPerShow: shows.actsPerShow, scheduleType: shows.scheduleType, scheduleDayOfWeek: shows.scheduleDayOfWeek })
 		.from(shows)
 		.where(eq(shows.accountId, params.id))
 		.orderBy(sql`coalesce(${shows.scheduleDayOfWeek}, 7)`, asc(shows.name));
@@ -67,7 +67,8 @@ export const load: PageServerLoad = async ({ params, url, parent }) => {
 				role: lineupEntries.role,
 				status: lineupEntries.status,
 				notes: lineupEntries.notes,
-				instagram: people.instagram
+				instagram: people.instagram,
+				photoUrl: people.photoUrl
 			})
 			.from(lineupEntries)
 			.leftJoin(people, eq(lineupEntries.personId, people.id))

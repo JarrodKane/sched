@@ -4,7 +4,7 @@
 	let { data }: { data: PageData } = $props();
 </script>
 
-<svelte:head><title>Dashboard — IG Scheduler</title></svelte:head>
+<svelte:head><title>Dashboard — Sched</title></svelte:head>
 
 <div class="mb-8 flex items-center justify-between">
 	<h1 class="text-2xl font-bold">Your accounts</h1>
