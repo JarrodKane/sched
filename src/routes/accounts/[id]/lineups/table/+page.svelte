@@ -362,7 +362,7 @@
 				{@const active = lineup.entries.filter(e => e.status !== 'cancelled' && e.role !== 'support')}
 				{@const cap = data.selectedShow?.actsPerShow}
 				{@const pct = cap && cap > 0 ? Math.round((active.length / cap) * 100) : null}
-				<div class="rounded-2xl bg-base-100 border border-base-200 overflow-hidden shadow-md">
+				<div class="rounded-2xl bg-base-100 border border-base-200 overflow-hidden shadow-md min-w-0">
 
 					<!-- Date header -->
 					<div class="flex items-center justify-between px-4 py-3 border-b border-base-200/60 bg-base-200/30">
@@ -530,8 +530,8 @@
 											</td>
 
 											<!-- Name + clickable role -->
-											<td>
-												<p class="font-medium text-sm {entry.status === 'cancelled' ? 'line-through' : ''}">{entry.name}</p>
+											<td class="min-w-0 overflow-hidden">
+												<p class="font-medium text-sm {entry.status === 'cancelled' ? 'line-through' : ''} truncate">{entry.name}</p>
 												<button
 													onclick={() => updateEntry(entry.id, 'role', ROLE_CYCLE[entry.role] ?? 'act')}
 													class="text-xs text-base-content/40 hover:text-primary transition-colors mt-0.5 leading-none"
@@ -541,7 +541,7 @@
 												</button>
 												{#if entry.instagram}
 													<a href={igUrl(entry.instagram)} target="_blank" rel="noopener"
-														class="text-xs text-primary/70 hover:text-primary block truncate sm:hidden mt-0.5"
+														class="text-xs text-primary/70 hover:text-primary block truncate sm:hidden mt-0.5 max-w-28"
 														title={igHandle(entry.instagram)}
 													>{igHandle(entry.instagram)}</a>
 												{/if}
@@ -588,7 +588,7 @@
 
 											<!-- Download + Remove -->
 											<td class="w-16">
-												<div class="flex items-center justify-end gap-2">
+												<div class="flex items-center justify-end gap-1">
 													{#if entry.photoUrl}
 														<button
 															onclick={() => downloadPersonPhoto(entry.photoUrl!, entry.name)}
