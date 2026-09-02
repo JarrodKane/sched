@@ -98,12 +98,18 @@
 										—
 									</div>
 								{:else}
-									<img
-										src={thumb}
-										alt=""
-										class="h-14 w-14 shrink-0 rounded-box object-cover"
-										onerror={() => { brokenImages = new Set([...brokenImages, thumb]); }}
-									/>
+									<div class="relative h-14 w-14 shrink-0 rounded-box overflow-hidden skeleton">
+										<img
+											src={thumb}
+											alt=""
+											class="h-14 w-14 object-cover opacity-0 transition-opacity duration-200"
+											onerror={() => { brokenImages = new Set([...brokenImages, thumb]); }}
+											onload={(e) => {
+												e.currentTarget.classList.remove('opacity-0');
+												e.currentTarget.parentElement?.classList.remove('skeleton');
+											}}
+										/>
+									</div>
 								{/if}
 
 								<!-- Content -->

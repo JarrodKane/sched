@@ -212,12 +212,18 @@
 			{#each visibleFiles as file}
 				<div class="card bg-base-100 overflow-hidden group {selectMode && selected.has(file.path) ? 'ring-2 ring-primary' : ''}">
 					<figure class="aspect-square overflow-hidden bg-base-200 relative">
-						<img
-							src={file.url}
-							alt=""
-							class="h-full w-full object-cover transition-transform group-hover:scale-105"
-							loading="lazy"
-						/>
+						<div class="relative w-full h-full skeleton">
+							<img
+								src={file.url}
+								alt=""
+								class="h-full w-full object-cover opacity-0 transition-[opacity,transform] duration-200 group-hover:scale-105"
+								loading="lazy"
+								onload={(e) => {
+									e.currentTarget.classList.remove('opacity-0');
+									e.currentTarget.parentElement?.classList.remove('skeleton');
+								}}
+							/>
+						</div>
 
 						<!-- Status badge -->
 						{#if file.inUse}

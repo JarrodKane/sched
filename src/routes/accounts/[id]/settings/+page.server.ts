@@ -20,7 +20,7 @@
  *   actions  — ten named actions; each re-checks access before mutating
  *   fail()   — returns 4xx with field-specific error keys
  */
-import { fail, redirect } from '@sveltejs/kit';
+import { fail, redirect, error } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { users, socialAccounts, captionSnippets, tagSnippets } from '$lib/server/db/schema';
 import { eq, asc } from 'drizzle-orm';
@@ -42,8 +42,9 @@ async function requireAccess(locals: App.Locals, accountId: string) {
 }
 
 export const load: PageServerLoad = async ({ params, parent }) => {
-	const { profile } = await parent();
+	const { profile, canAccessSocial } = await parent();
 	if (!profile) redirect(303, '/login');
+	if (!canAccessSocial) error(403, 'Access denied');
 
 	const [snippets, tags, accountRows] = await Promise.all([
 		db

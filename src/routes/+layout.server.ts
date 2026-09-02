@@ -19,7 +19,7 @@ import type { LayoutServerLoad } from './$types';
 export const load: LayoutServerLoad = async ({ locals, url }) => {
 	const { session, user } = await locals.safeGetSession();
 
-	if (!session && url.pathname !== '/login') {
+	if (!session && url.pathname !== '/login' && !url.pathname.startsWith('/upload/')) {
 		redirect(303, '/login');
 	}
 

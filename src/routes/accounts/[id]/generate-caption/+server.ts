@@ -81,16 +81,22 @@ Structure to follow in this exact order:
 2. Details block — immediately after the opener, no filler in between. List each piece of info on its own line using emojis:
    📅 [Day or frequency]
    ⏰ [Time]
-   📍 [Address]
+   📍 If a venue @handle was provided, write it on its own line (e.g. 📍 @MirandabarMelbourne), then add the street address on the next line. If only an address is available, just write the address.
    💰 [Ticket cost]
 
 3. Ticket / entry CTA — one or two lines. Read the ticket info carefully. If tickets need to be booked (paid entry or a reservation link was provided), write something like "Grab your spot via the link in bio" and put the URL on its own line. If it is free entry with no booking required, write something like "No booking needed, just turn up on the night" or "Free entry — doors open at [time], just show up." Do not say "link in bio" for free walk-in events.
 
-4. Acts — only include this section if performers or an MC were provided. Mention them naturally in one or two lines. E.g. "Hosted by @mc_handle with sets from @act1 and @act2." Skip this section entirely if no acts were given.
+4. Acts — only include this section if performers were provided. Use a clean vertical block, no role labels (no "MC", no "Hosted by"). Format exactly like this:
+   Starring 🎤
+   @performer1
+   @performer2
+   List them in the order they were given. Skip this section entirely if no performers were given.
 
-5. Body — three to five sentences that flesh out the night. Write about: the vibe and atmosphere, the type of comedy and what audiences can expect, the venue and the area it is in, why it is worth coming to. This section should be rich with natural detail that helps people discover the show — mention the suburb, the street, the venue style, the format of the night. Draw from everything in the snippets. Be warm and specific, never hype-y.
+5. Body — three to five short thoughts that flesh out the night. Write about: the vibe and atmosphere, the type of comedy and what audiences can expect, the venue and the area it is in, why it is worth coming to. Each thought should be on its own line, separated by a line break. Use exactly 1 or 2 emojis in this section — no more, no fewer. Place them mid-sentence or at the end of a line, never at the start of a line (that makes it look like a bullet list). They should feel like a natural accent, not decoration. Draw from everything in the snippets. Be warm and specific, never hype-y. Every time you write this section, vary the angle, the opening thought, the words, and the order — never produce the same body twice.
 
-6. A line of local SEO hashtags — suburb, city, comedy-specific, and venue tags. E.g. #Melbourne #FlindersLane #MelbourneComedy #ComedyNight`;
+6. A line of local SEO hashtags — suburb, city, comedy-specific, and venue tags. E.g. #Melbourne #FlindersLane #MelbourneComedy #ComedyNight
+
+Formatting rule: leave a blank line between each of the six sections above. The caption should breathe, not run together.`;
 
 	const recapTemplate = `You polish Instagram captions for a comedy brand. The user has written a casual post-event recap — your job is to lightly improve it, not rewrite it.
 
@@ -118,21 +124,21 @@ STRICT RULES — never break these:
 
 	let tagSection = '';
 	if (tags.length) {
-		const grouped: Record<string, string[]> = { venue: [], act: [], mc: [], other: [] };
+		const venue: string[] = [];
+		const performers: string[] = [];
 		for (const t of tags) {
-			const key = t.category && ['venue', 'act', 'mc'].includes(t.category) ? t.category : 'other';
-			grouped[key].push(`@${t.username}`);
+			if (t.category === 'venue') venue.push(`@${t.username}`);
+			else performers.push(`@${t.username}`);
 		}
 		const lines: string[] = [];
-		if (grouped.venue.length) lines.push(`Venue: ${grouped.venue.join(', ')} — tag in the post body`);
-		if (grouped.act.length) lines.push(`Act(s): ${grouped.act.join(', ')} — tag the performers`);
-		if (grouped.mc.length) lines.push(`MC/Host: ${grouped.mc.join(', ')} — mention as MC or host`);
-		if (grouped.other.length) lines.push(`Other: ${grouped.other.join(', ')} — include where appropriate`);
-		tagSection = `\n\nInstagram handles to always include in the caption:\n${lines.join('\n')}`;
+		if (venue.length) lines.push(`Venue: ${venue.join(', ')} — use for the location section`);
+		if (performers.length) lines.push(`Performers (in order): ${performers.join(', ')} — list in the acts block`);
+		tagSection = `\n\nInstagram handles to include in the caption:\n${lines.join('\n')}`;
 	}
 
-	const taggedPeopleSection = Array.isArray(taggedPeople) && taggedPeople.length
-		? `\n\nThis post tags the following people — include their @handles naturally in the caption body:\n${(taggedPeople as string[]).map((u) => `@${u}`).join(', ')}`
+	const taggedPeopleList = Array.isArray(taggedPeople) ? (taggedPeople as string[]) : [];
+	const taggedPeopleSection = taggedPeopleList.length
+		? `\n\nExtra performers tagged in this post — add their @handles to the acts block (Starring 🎤 section), in addition to any performers listed above:\n${taggedPeopleList.map((u: string) => `@${u}`).join(', ')}`
 		: '';
 
 	const pastCaptionsSection = recentPosts.length
@@ -160,7 +166,7 @@ STRICT RULES — never break these:
 				{ role: 'user', content: userPrompt }
 			],
 			max_tokens: 2000,
-			temperature: 0.8
+			temperature: 1.1
 		})
 	});
 

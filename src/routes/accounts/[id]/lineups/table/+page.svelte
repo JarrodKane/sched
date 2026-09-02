@@ -16,7 +16,7 @@
 
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { goto, invalidateAll } from '$app/navigation';
+	import { goto, invalidateAll, afterNavigate } from '$app/navigation';
 	import LineupCard from '$lib/components/LineupCard.svelte';
 	import type { PageData } from './$types';
 
@@ -95,9 +95,16 @@
 		await fetch('?/createLineup', { method: 'POST', body: fd });
 		await invalidateAll();
 	}
+
+	afterNavigate(() => {
+		if (data.focusDate) {
+			const el = document.getElementById(`date-${data.focusDate}`);
+			el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+		}
+	});
 </script>
 
-<svelte:head><title>Table — Lineups</title></svelte:head>
+<svelte:head><title>Lineups — Sched</title></svelte:head>
 
 <!-- View switcher -->
 <div class="flex items-center gap-1 mb-5">
@@ -192,7 +199,7 @@
 				{/if}
 
 				{#if item.type === 'placeholder'}
-					<div class="rounded-2xl border border-dashed border-base-content/20 px-4 py-3 flex items-center justify-between gap-4">
+					<div id="date-{item.date}" class="rounded-2xl border border-dashed border-base-content/20 px-4 py-3 flex items-center justify-between gap-4">
 						<div>
 							<span class="text-sm text-base-content/50">{formatDate(item.date)}</span>
 							<p class="text-xs text-base-content/30 mt-0.5">No lineup created</p>
@@ -203,7 +210,9 @@
 						</button>
 					</div>
 				{:else}
-					<LineupCard lineup={item.lineup} selectedShow={data.selectedShow} today={data.today} />
+					<div id="date-{item.date}">
+						<LineupCard lineup={item.lineup} selectedShow={data.selectedShow} today={data.today} />
+					</div>
 				{/if}
 			{/each}
 		</div>

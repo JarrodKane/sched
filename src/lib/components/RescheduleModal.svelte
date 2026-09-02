@@ -100,7 +100,7 @@
 					}}
 					class="btn btn-outline flex-1"
 				>Publish now</button>
-				<button type="button" onclick={() => dialog?.close()} class="btn btn-ghost flex-1 text-base-content/50">Cancel</button>
+				<button type="button" onclick={() => dialog?.close()} class="btn btn-soft flex-1">Cancel</button>
 			</div>
 		</form>
 	</div>

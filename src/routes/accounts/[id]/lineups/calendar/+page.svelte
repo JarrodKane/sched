@@ -68,7 +68,7 @@
 	const isCurrentMonth = $derived(data.month === data.today.slice(0, 7));
 </script>
 
-<svelte:head><title>Calendar — Lineups</title></svelte:head>
+<svelte:head><title>Lineups — Sched</title></svelte:head>
 
 <!-- View switcher -->
 <div class="flex items-center gap-1 mb-5">
@@ -139,7 +139,7 @@
 								{@const show = showMap.get(lineup.showId)}
 								{@const palette = showPalette.get(lineup.showId) ?? PALETTES[0]}
 								<a
-									href="/accounts/{data.accountMeta.id}/lineups/{lineup.id}"
+									href="/accounts/{data.accountMeta.id}/lineups/table?show={lineup.showId}&date={cell.date}"
 									class="block text-xs px-1.5 py-0.5 rounded transition {palette}"
 									title="{show?.name ?? ''} · {lineup.entryCount} acts"
 								>

@@ -33,8 +33,9 @@ async function getProfile(locals: App.Locals) {
 
 export const load: PageServerLoad = async ({ params, parent }) => {
 	// Layout already verified access and fetched accountMeta — no need to re-check
-	const { profile, accountMeta } = await parent();
+	const { profile, accountMeta, canAccessSocial } = await parent();
 	if (!profile) redirect(303, '/login');
+	if (!canAccessSocial) error(403, 'Access denied');
 	const account = accountMeta;
 
 	const { data: storageFiles, error: listErr } = await supabaseAdmin.storage

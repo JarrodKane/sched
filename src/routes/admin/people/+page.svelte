@@ -147,7 +147,15 @@
 <svelte:head><title>People — Sched</title></svelte:head>
 
 <!-- Shared crop modal — accountId swapped per person before opening -->
-<CropModal bind:this={cropModal} accountId={cropPersonId} oncomplete={onPhotoDone} />
+<CropModal
+	bind:this={cropModal}
+	accountId={cropPersonId}
+	lockRatio="4:5"
+	hideTypeSelector
+	simpleBgColors
+	hideSkip
+	oncomplete={onPhotoDone}
+/>
 <input bind:this={fileInputEl} type="file" accept="image/*" class="hidden" onchange={onFileChange} />
 
 <!-- Photo preview lightbox -->
@@ -403,6 +411,16 @@
 									<svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
 								</button>
 							{/if}
+							<button
+								type="button"
+								onclick={() => {
+									navigator.clipboard.writeText(`${location.origin}/upload/people/${person.id}`);
+								}}
+								class="btn btn-xs btn-outline btn-square"
+								title="Copy upload link for {person.name}"
+							>
+								<svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+							</button>
 							{#if data.isAdmin}
 								<button
 									type="button"

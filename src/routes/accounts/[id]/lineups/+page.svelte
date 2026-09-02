@@ -70,7 +70,7 @@
 	);
 </script>
 
-<svelte:head><title>Lineups</title></svelte:head>
+<svelte:head><title>Lineups — Sched</title></svelte:head>
 
 {#if form?.error}
 	<div role="alert" class="alert alert-error alert-soft mb-4 text-sm">{form.error}</div>

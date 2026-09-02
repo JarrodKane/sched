@@ -20,7 +20,7 @@
 import { error, fail } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { shows, lineups, lineupEntries, people, users } from '$lib/server/db/schema';
-import { eq, asc, desc, inArray, sql, and, ne } from 'drizzle-orm';
+import { eq, asc, desc, inArray, sql, and, ne, gt } from 'drizzle-orm';
 import { canAccessAsset } from '$lib/server/access';
 import type { PageServerLoad, Actions } from './$types';
 
@@ -54,8 +54,19 @@ export const load: PageServerLoad = async ({ params, url, parent }) => {
 	const showParam = url.searchParams.get('show');
 	const selectedShow = (showParam ? accountShows.find((s) => s.id === showParam) : undefined) ?? accountShows[0];
 
+	const dateParam = url.searchParams.get('date');
+	const focusDate = (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) ? dateParam : null;
+
 	const pageParam = url.searchParams.get('page');
-	const page = Math.max(1, parseInt(pageParam ?? '1') || 1);
+	let page = Math.max(1, parseInt(pageParam ?? '1') || 1);
+
+	if (focusDate) {
+		const [{ newerCount }] = await db
+			.select({ newerCount: sql<number>`count(*)::int` })
+			.from(lineups)
+			.where(and(eq(lineups.showId, selectedShow.id), gt(lineups.showDate, focusDate)));
+		page = Math.floor((newerCount as number) / PAGE_SIZE) + 1;
+	}
 
 	const [{ total }] = await db
 		.select({ total: sql<number>`count(*)::int` })
@@ -110,7 +121,7 @@ export const load: PageServerLoad = async ({ params, url, parent }) => {
 		}));
 	}
 
-	return { shows: accountShows, selectedShow, tableLineups, page: safePage, totalPages, today };
+	return { shows: accountShows, selectedShow, tableLineups, page: safePage, totalPages, today, focusDate };
 };
 
 export const actions: Actions = {

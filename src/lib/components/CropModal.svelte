@@ -27,11 +27,16 @@
 	interface Props {
 		accountId: string;
 		maxUploadBytes?: number;
+		uploadEndpoint?: string;
+		lockRatio?: CropRatio;       // lock to this ratio and hide the ratio selector
+		hideTypeSelector?: boolean;  // hide the feed/story type toggle
+		simpleBgColors?: boolean;    // show only white/black solid color buttons, no blur/custom picker
+		hideSkip?: boolean;          // hide "Skip — use original"
 		oncomplete?: (url: string, thumbnailUrl: string | null) => void;
 		oncancel?: () => void;
 	}
 
-	let { accountId, maxUploadBytes = 20 * 1024 * 1024, oncomplete, oncancel }: Props = $props();
+	let { accountId, maxUploadBytes = 20 * 1024 * 1024, uploadEndpoint = '/api/upload', lockRatio, hideTypeSelector, simpleBgColors, hideSkip, oncomplete, oncancel }: Props = $props();
 
 	type CropRatio = '9:16' | '4:5' | '1:1' | '1.91:1';
 	type BgType = 'blur' | 'color';
@@ -256,7 +261,8 @@
 		uploadError = '';
 		cropDone = false;
 		cropType = postType;
-		cropRatio = postType === 'story' ? '9:16' : '4:5';
+		cropRatio = lockRatio ?? (postType === 'story' ? '9:16' : '4:5');
+		if (simpleBgColors) { bgType = 'color'; bgColor = '#000000'; }
 		showBgPreview = false;
 		bgPreviewUrl = '';
 		if (cropObjectUrl) URL.revokeObjectURL(cropObjectUrl);
@@ -328,7 +334,7 @@
 			fd.append('file', fileToUpload);
 			if (thumbnailFile) fd.append('thumbnail', thumbnailFile);
 			fd.append('account_id', accountId);
-			const res = await fetch('/api/upload', { method: 'POST', body: fd });
+			const res = await fetch(uploadEndpoint, { method: 'POST', body: fd });
 			const json = await res.json();
 			if (!res.ok) throw new Error(json.error ?? 'Upload failed');
 
@@ -357,7 +363,9 @@
 		</div>
 
 		<!-- Type + Ratio controls -->
+		{#if !hideTypeSelector || !lockRatio}
 		<div class="flex flex-wrap gap-x-6 gap-y-4">
+			{#if !hideTypeSelector}
 			<div class="flex flex-col gap-1.5">
 				<p class="text-xs font-medium uppercase tracking-wide text-base-content/40">Type</p>
 				<div class="join">
@@ -373,7 +381,9 @@
 					>Story</button>
 				</div>
 			</div>
+			{/if}
 
+			{#if !lockRatio}
 			<div class="flex flex-col gap-1.5">
 				<p class="text-xs font-medium uppercase tracking-wide text-base-content/40">Ratio</p>
 				<div class="join">
@@ -386,7 +396,9 @@
 					{/each}
 				</div>
 			</div>
+			{/if}
 		</div>
+		{/if}
 
 		<!-- Viewport: background layer sits behind Cropper.js — visible in empty
 		     areas when the image is zoomed out. Preview overlay appears on top. -->
@@ -470,27 +482,42 @@
 				Background <span class="normal-case font-normal text-base-content/30">(fills empty areas)</span>
 			</p>
 			<div class="flex items-center gap-3 flex-wrap">
-				<div class="join">
-					<button
-						type="button"
-						onclick={() => (bgType = 'blur')}
-						class="btn join-item btn-xs {bgType === 'blur' ? 'btn-primary' : 'btn-outline'}"
-					>Blurred photo</button>
-					<button
-						type="button"
-						onclick={() => (bgType = 'color')}
-						class="btn join-item btn-xs {bgType === 'color' ? 'btn-primary' : 'btn-outline'}"
-					>Solid color</button>
-				</div>
-				{#if bgType === 'color'}
-					<label class="flex items-center gap-2 cursor-pointer">
-						<input
-							type="color"
-							bind:value={bgColor}
-							class="h-7 w-10 cursor-pointer rounded border border-base-300 p-0.5 bg-transparent"
-						/>
-						<span class="text-xs text-base-content/50 font-mono">{bgColor}</span>
-					</label>
+				{#if simpleBgColors}
+					<div class="join">
+						<button
+							type="button"
+							onclick={() => { bgType = 'color'; bgColor = '#000000'; }}
+							class="btn join-item btn-xs {bgColor === '#000000' && bgType === 'color' ? 'btn-primary' : 'btn-outline'}"
+						>Black</button>
+						<button
+							type="button"
+							onclick={() => { bgType = 'color'; bgColor = '#ffffff'; }}
+							class="btn join-item btn-xs {bgColor === '#ffffff' && bgType === 'color' ? 'btn-primary' : 'btn-outline'}"
+						>White</button>
+					</div>
+				{:else}
+					<div class="join">
+						<button
+							type="button"
+							onclick={() => (bgType = 'blur')}
+							class="btn join-item btn-xs {bgType === 'blur' ? 'btn-primary' : 'btn-outline'}"
+						>Blurred photo</button>
+						<button
+							type="button"
+							onclick={() => (bgType = 'color')}
+							class="btn join-item btn-xs {bgType === 'color' ? 'btn-primary' : 'btn-outline'}"
+						>Solid color</button>
+					</div>
+					{#if bgType === 'color'}
+						<label class="flex items-center gap-2 cursor-pointer">
+							<input
+								type="color"
+								bind:value={bgColor}
+								class="h-7 w-10 cursor-pointer rounded border border-base-300 p-0.5 bg-transparent"
+							/>
+							<span class="text-xs text-base-content/50 font-mono">{bgColor}</span>
+						</label>
+					{/if}
 				{/if}
 				<!-- Preview toggle sits in the same row as the bg options so the connection is clear -->
 				<button
@@ -524,7 +551,7 @@
 				{cropUploading ? 'Processing & uploading…' : 'Save & use this image'}
 			</button>
 			<div class="flex gap-2">
-				{#if !isEditingExisting}
+				{#if !isEditingExisting && !hideSkip}
 					<button
 						type="button"
 						onclick={() => doCrop(true)}

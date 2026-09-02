@@ -12,7 +12,7 @@
  *   fail()    — returns 4xx with an error string
  *   parent()  — inherits canAccessSocial from the account layout load
  */
-import { redirect, fail } from '@sveltejs/kit';
+import { redirect, fail, error } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { users, scheduledPosts } from '$lib/server/db/schema';
 import { eq, and, inArray, desc, gte } from 'drizzle-orm';
@@ -21,8 +21,9 @@ import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, parent }) => {
 	// Layout (+layout.server.ts) already validated access and fetched accountMeta.
-	const { profile, accountMeta } = await parent();
+	const { profile, accountMeta, canAccessSocial } = await parent();
 	if (!profile) redirect(303, '/login');
+	if (!canAccessSocial) error(403, 'Access denied');
 
 	const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 

@@ -106,7 +106,7 @@
 			</button>
 			<!-- Desktop: sign out button -->
 			<form method="POST" action="/login?/logout" class="hidden sm:block">
-				<button type="submit" class="btn btn-ghost btn-sm">Sign out</button>
+				<button type="submit" class="btn btn-soft btn-sm">Sign out</button>
 			</form>
 		</div>
 	</div>
