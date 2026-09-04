@@ -51,7 +51,7 @@ export const load: PageServerLoad = async ({ params, parent }) => {
 	if (!lineup) error(404, 'Lineup not found');
 
 	const [show] = await db
-		.select({ id: shows.id, name: shows.name, actsPerShow: shows.actsPerShow, accountId: shows.accountId })
+		.select({ id: shows.id, name: shows.name, actsPerShow: shows.actsPerShow, accountId: shows.accountId, canvaTemplateId: shows.canvaTemplateId })
 		.from(shows)
 		.where(eq(shows.id, lineup.showId))
 		.limit(1);

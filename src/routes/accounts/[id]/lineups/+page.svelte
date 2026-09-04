@@ -22,6 +22,7 @@
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
 	let calendarInput = $state<HTMLInputElement | undefined>();
+	let editingTemplateShowId = $state<string | null>(null);
 
 	const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -152,12 +153,46 @@
 			{@const showDate = existingLineup?.showDate ?? expectedDate}
 			<div class="rounded-2xl bg-base-100 border border-base-200 overflow-hidden">
 				<div class="px-4 py-3 border-b border-base-200/60">
-					<p class="font-semibold text-sm">{show.name}</p>
-					{#if show.scheduleType}
-						<p class="text-xs text-base-content/40 mt-0.5">
-							{show.scheduleType === 'weekly' ? 'Weekly' : show.scheduleType === 'fortnightly' ? 'Fortnightly' : show.scheduleType === 'monthly' ? 'Monthly' : 'One-off'}
-							{show.scheduleDayOfWeek != null ? ` · ${DAYS[show.scheduleDayOfWeek]}s` : ''}
-						</p>
+					<div class="flex items-start justify-between gap-2">
+						<div class="min-w-0">
+							<p class="font-semibold text-sm">{show.name}</p>
+							{#if show.scheduleType}
+								<p class="text-xs text-base-content/40 mt-0.5">
+									{show.scheduleType === 'weekly' ? 'Weekly' : show.scheduleType === 'fortnightly' ? 'Fortnightly' : show.scheduleType === 'monthly' ? 'Monthly' : 'One-off'}
+									{show.scheduleDayOfWeek != null ? ` · ${DAYS[show.scheduleDayOfWeek]}s` : ''}
+								</p>
+							{/if}
+						</div>
+						<button
+							type="button"
+							class="btn btn-xs btn-soft btn-square shrink-0"
+							title="Configure Canva template"
+							onclick={() => { editingTemplateShowId = editingTemplateShowId === show.id ? null : show.id; }}
+						>
+							<svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+						</button>
+					</div>
+					{#if editingTemplateShowId === show.id}
+						<form
+							method="POST"
+							action="?/updateShowTemplate"
+							use:enhance={() => async ({ result, update }) => {
+								if (result.type === 'success') editingTemplateShowId = null;
+								await update({ reset: false });
+							}}
+							class="mt-2 flex gap-2"
+						>
+							<input type="hidden" name="show_id" value={show.id} />
+							<input
+								type="text"
+								name="canva_template_id"
+								class="input input-xs flex-1 font-mono"
+								placeholder="Canva brand template ID"
+								value={show.canvaTemplateId ?? ''}
+							/>
+							<button type="submit" class="btn btn-xs btn-primary shrink-0">Save</button>
+							<button type="button" class="btn btn-xs btn-outline shrink-0" onclick={() => { editingTemplateShowId = null; }}>Cancel</button>
+						</form>
 					{/if}
 				</div>
 

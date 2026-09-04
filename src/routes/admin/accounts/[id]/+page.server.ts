@@ -88,11 +88,12 @@ export const actions: Actions = {
 		const scheduleDayOfWeek = schedDayRaw !== '' && schedDayRaw != null ? parseInt(schedDayRaw, 10) : null;
 		const actsRaw = (form.get('acts_per_show') as string)?.trim();
 		const actsPerShow = actsRaw ? parseInt(actsRaw, 10) || null : null;
+		const canvaTemplateId = (form.get('canva_template_id') as string)?.trim() || null;
 
 		if (!id || !name) return fail(400, { showError: 'Show name is required.' });
 
 		await db.update(shows)
-			.set({ name, humanitixEventId, eventbriteEventId, capacity, scheduleType, scheduleDayOfWeek, actsPerShow })
+			.set({ name, humanitixEventId, eventbriteEventId, capacity, scheduleType, scheduleDayOfWeek, actsPerShow, canvaTemplateId })
 			.where(and(eq(shows.id, id), eq(shows.accountId, params.id)));
 
 		return { showUpdated: true };

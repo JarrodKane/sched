@@ -99,6 +99,7 @@ export const shows = pgTable('shows', {
 	scheduleType: text('schedule_type'), // 'weekly' | 'fortnightly' | 'monthly' | 'one_off' | null
 	scheduleDayOfWeek: integer('schedule_day_of_week'), // 0=Sun … 6=Sat; null for one_off/monthly
 	actsPerShow: integer('acts_per_show'), // target act count, drives over-capacity warning
+	canvaTemplateId: text('canva_template_id'), // Canva brand template ID for promo image generation
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
 
@@ -137,6 +138,15 @@ export const lineupEntries = pgTable('lineup_entries', {
 	sortOrder: integer('sort_order').notNull().default(0),
 	notes: text('notes'),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+// Canva OAuth tokens — single row, keyed by id='default'
+export const canvaTokens = pgTable('canva_tokens', {
+	id: text('id').primaryKey().default('default'),
+	accessToken: text('access_token'),
+	refreshToken: text('refresh_token'),
+	expiresAt: timestamp('expires_at', { withTimezone: true }),
+	updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 });
 
 // Cached ticket data per show per date — upserted each poll cycle

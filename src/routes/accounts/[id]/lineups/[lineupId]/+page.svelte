@@ -89,6 +89,94 @@
 	const activeCount = $derived(localEntries.filter((e) => e.status !== 'cancelled').length);
 	const overCapacity = $derived(data.show.actsPerShow != null && activeCount > data.show.actsPerShow);
 	const atCapacity = $derived(data.show.actsPerShow != null && activeCount === data.show.actsPerShow);
+
+	// ── Promo image generation ────────────────────────────────────────────────
+	let promoDialog = $state<HTMLDialogElement | undefined>();
+
+	// Ordered list of selected performers (user can reorder)
+	type PromoEntry = { id: string; name: string; photoUrl: string };
+	let selectedPerformers = $state<PromoEntry[]>([]);
+	let promoDate = $state(data.lineup.showDate);
+	let promoGenerating = $state(false);
+	let promoResult = $state<{ url: string; canvaDesignId: string } | null>(null);
+	let promoError = $state<string | null>(null);
+
+	const entriesWithPhotos = $derived(
+		localEntries.filter((e) => e.photoUrl && e.status !== 'cancelled')
+	);
+
+	function togglePromoEntry(entry: { id: string; name: string; photoUrl: string | null }) {
+		if (!entry.photoUrl) return;
+		const existing = selectedPerformers.findIndex((p) => p.id === entry.id);
+		if (existing >= 0) {
+			selectedPerformers = selectedPerformers.filter((p) => p.id !== entry.id);
+		} else {
+			selectedPerformers = [...selectedPerformers, { id: entry.id, name: entry.name, photoUrl: entry.photoUrl }];
+		}
+	}
+
+	function moveSelectedUp(index: number) {
+		if (index === 0) return;
+		const copy = [...selectedPerformers];
+		[copy[index - 1], copy[index]] = [copy[index], copy[index - 1]];
+		selectedPerformers = copy;
+	}
+
+	function moveSelectedDown(index: number) {
+		if (index >= selectedPerformers.length - 1) return;
+		const copy = [...selectedPerformers];
+		[copy[index], copy[index + 1]] = [copy[index + 1], copy[index]];
+		selectedPerformers = copy;
+	}
+
+	function openPromoModal() {
+		selectedPerformers = [];
+		promoDate = data.lineup.showDate;
+		promoResult = null;
+		promoError = null;
+		promoGenerating = false;
+		promoDialog?.showModal();
+	}
+
+	async function generatePromo() {
+		promoGenerating = true;
+		promoError = null;
+		try {
+			const res = await fetch(`/accounts/${data.show.accountId}/lineups/${data.lineup.id}/generate-promo`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					entries: selectedPerformers.map((p) => ({ name: p.name, photoUrl: p.photoUrl })),
+					showDate: promoDate
+				})
+			});
+			if (!res.ok) {
+				const err = await res.json().catch(() => ({})) as Record<string, unknown>;
+				throw new Error((err?.message as string) ?? `Error ${res.status}`);
+			}
+			const result = await res.json() as { url: string; canvaDesignId: string };
+			promoResult = result;
+		} catch (err) {
+			promoError = err instanceof Error ? err.message : 'Generation failed';
+		} finally {
+			promoGenerating = false;
+		}
+	}
+
+	async function downloadPromo(url: string) {
+		try {
+			const res = await fetch(url);
+			const blob = await res.blob();
+			const blobUrl = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = blobUrl;
+			a.download = `${data.show.name}-promo-${data.lineup.showDate}.jpg`.toLowerCase().replace(/\s+/g, '-');
+			a.click();
+			URL.revokeObjectURL(blobUrl);
+		} catch {
+			window.open(url, '_blank');
+		}
+	}
 </script>
 
 <svelte:head><title>{data.show.name} · {data.lineup.showDate}</title></svelte:head>
@@ -102,15 +190,29 @@
 		</a>
 		<h2 class="mt-2 text-lg font-semibold">{formatDate(data.lineup.showDate)}</h2>
 	</div>
-	<button type="button" onclick={copyLineup} class="btn btn-sm {copyDone ? 'btn-success' : 'btn-outline'} shrink-0 gap-1.5 mt-1 transition-all" title="Copy lineup">
-		{#if copyDone}
-			<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-			Copied!
-		{:else}
-			<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-			Copy
+	<div class="flex items-center gap-1.5 shrink-0 mt-1">
+		{#if data.show.canvaTemplateId}
+			<button
+				type="button"
+				onclick={openPromoModal}
+				disabled={entriesWithPhotos.length === 0}
+				class="btn btn-sm btn-outline gap-1.5 transition-all"
+				title={entriesWithPhotos.length === 0 ? 'No performers with photos in this lineup' : 'Generate promo image'}
+			>
+				<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+				<span class="hidden sm:inline">Promo</span>
+			</button>
 		{/if}
-	</button>
+		<button type="button" onclick={copyLineup} class="btn btn-sm {copyDone ? 'btn-success' : 'btn-outline'} gap-1.5 transition-all" title="Copy lineup">
+			{#if copyDone}
+				<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+				<span class="hidden sm:inline">Copied!</span>
+			{:else}
+				<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+				<span class="hidden sm:inline">Copy</span>
+			{/if}
+		</button>
+	</div>
 </div>
 
 <!-- Capacity bar -->
@@ -330,6 +432,142 @@
 
 <!-- Add act -->
 <AddActForm lineupId={data.lineup.id} bind:localEntries={localEntries} />
+
+<!-- Promo image generation modal -->
+{#if data.show.canvaTemplateId}
+<dialog bind:this={promoDialog} class="modal">
+	<div class="modal-box max-w-md">
+		{#if promoResult}
+			<!-- Result: preview + actions -->
+			<h3 class="font-bold text-base mb-4">Promo image ready</h3>
+			<img src={promoResult.url} alt="Generated promo" class="w-full rounded-xl mb-4 object-contain max-h-80" />
+			<p class="text-xs text-base-content/40 mb-4">
+				The image was generated via Canva. You can download it directly, or open the Canva design to make last-minute tweaks before saving.
+			</p>
+			<div class="flex flex-col gap-2">
+				<div class="flex gap-2">
+					<button
+						type="button"
+						onclick={() => downloadPromo(promoResult!.url)}
+						class="btn btn-primary flex-1 gap-1.5"
+					>
+						<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+						Download
+					</button>
+					<a
+						href="https://www.canva.com/design/{promoResult.canvaDesignId}/edit"
+						target="_blank"
+						rel="noopener noreferrer"
+						class="btn btn-outline flex-1 gap-1.5"
+					>
+						<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+						Open in Canva
+					</a>
+				</div>
+				<button type="button" onclick={() => promoDialog?.close()} class="btn btn-ghost btn-sm text-base-content/40">
+					Close
+				</button>
+			</div>
+		{:else if promoGenerating}
+			<!-- Loading -->
+			<div class="flex flex-col items-center py-8 gap-4">
+				<span class="loading loading-spinner loading-lg text-primary"></span>
+				<div class="text-center">
+					<p class="text-sm font-medium">Generating promo image…</p>
+					<p class="text-xs text-base-content/40 mt-1">This can take up to 30 seconds.</p>
+				</div>
+			</div>
+		{:else}
+			<!-- Selection -->
+			<h3 class="font-bold text-base mb-1">Generate promo image</h3>
+			<p class="text-xs text-base-content/50 mb-4">Select performers to feature, then drag to reorder.</p>
+
+			{#if promoError}
+				<div role="alert" class="alert alert-error alert-soft text-sm mb-4">{promoError}</div>
+			{/if}
+
+			<!-- Date field -->
+			<div class="mb-4">
+				<p class="text-[11px] text-base-content/40 mb-1">Show date (appears on the image)</p>
+				<input type="date" bind:value={promoDate} class="input input-sm w-full" />
+			</div>
+
+			<!-- Performer picker -->
+			<p class="text-[11px] text-base-content/40 mb-2">Performers with photos</p>
+			<div class="flex flex-col gap-1.5 max-h-48 overflow-y-auto mb-4 pr-1">
+				{#each localEntries as entry}
+					{#if entry.photoUrl}
+						{@const isSelected = selectedPerformers.some((p) => p.id === entry.id)}
+						<label class="flex items-center gap-3 p-2 rounded-xl cursor-pointer hover:bg-base-200 transition-colors {entry.status === 'cancelled' ? 'opacity-40' : ''}">
+							<input
+								type="checkbox"
+								class="checkbox checkbox-sm checkbox-primary"
+								checked={isSelected}
+								onchange={() => togglePromoEntry(entry)}
+							/>
+							<img src={entry.photoUrl} alt={entry.name} class="h-9 w-9 rounded-full object-cover shrink-0" />
+							<div class="min-w-0 flex-1">
+								<p class="text-sm font-medium leading-snug truncate">{entry.name}</p>
+								<p class="text-xs text-base-content/40">{ROLE_LABELS[entry.role] ?? entry.role}{entry.status === 'cancelled' ? ' · Cancelled' : ''}</p>
+							</div>
+						</label>
+					{:else}
+						<div class="flex items-center gap-3 p-2 rounded-xl opacity-25 cursor-not-allowed select-none">
+							<div class="h-4 w-4 shrink-0"></div>
+							<div class="h-9 w-9 rounded-full bg-base-300 shrink-0 flex items-center justify-center">
+								<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+							</div>
+							<div class="min-w-0">
+								<p class="text-sm leading-snug truncate">{entry.name}</p>
+								<p class="text-xs text-base-content/40">No photo</p>
+							</div>
+						</div>
+					{/if}
+				{/each}
+			</div>
+
+			<!-- Ordered selection list -->
+			{#if selectedPerformers.length > 0}
+				<div class="mb-4">
+					<p class="text-[11px] text-base-content/40 mb-2">Order (slot 1 → {selectedPerformers.length})</p>
+					<div class="flex flex-col gap-1">
+						{#each selectedPerformers as p, i (p.id)}
+							<div class="flex items-center gap-2 bg-base-200/60 rounded-xl px-3 py-2">
+								<span class="text-xs font-bold text-base-content/30 w-5 shrink-0 tabular-nums">{i + 1}</span>
+								<img src={p.photoUrl} alt={p.name} class="h-7 w-7 rounded-full object-cover shrink-0" />
+								<p class="text-sm flex-1 min-w-0 truncate">{p.name}</p>
+								<div class="flex flex-col gap-0.5 shrink-0">
+									<button type="button" onclick={() => moveSelectedUp(i)} disabled={i === 0}
+										class="btn btn-xs btn-soft h-5 min-h-0 w-6 p-0 disabled:opacity-20">
+										<svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
+									</button>
+									<button type="button" onclick={() => moveSelectedDown(i)} disabled={i === selectedPerformers.length - 1}
+										class="btn btn-xs btn-soft h-5 min-h-0 w-6 p-0 disabled:opacity-20">
+										<svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+									</button>
+								</div>
+							</div>
+						{/each}
+					</div>
+				</div>
+			{/if}
+
+			<div class="flex gap-2">
+				<button type="button" onclick={() => promoDialog?.close()} class="btn btn-sm btn-outline flex-1">Cancel</button>
+				<button
+					type="button"
+					onclick={generatePromo}
+					disabled={selectedPerformers.length === 0}
+					class="btn btn-sm btn-primary flex-1"
+				>
+					Generate{selectedPerformers.length > 0 ? ` (${selectedPerformers.length})` : ''}
+				</button>
+			</div>
+		{/if}
+	</div>
+	<form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+{/if}
 
 <!-- Delete lineup -->
 <div class="mt-10 pt-6 border-t border-base-200">

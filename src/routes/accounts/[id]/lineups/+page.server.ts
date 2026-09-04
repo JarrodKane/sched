@@ -86,6 +86,26 @@ export const load: PageServerLoad = async ({ params, url, parent }) => {
 };
 
 export const actions: Actions = {
+	updateShowTemplate: async ({ request, params, locals }) => {
+		if (!await checkLineupAccess(locals, params.id)) return fail(403, { error: 'Access denied' });
+
+		const form = await request.formData();
+		const showId = (form.get('show_id') as string)?.trim();
+		const canvaTemplateId = (form.get('canva_template_id') as string)?.trim() || null;
+
+		if (!showId) return fail(400, { error: 'Missing show ID.' });
+
+		const [show] = await db
+			.select({ id: shows.id })
+			.from(shows)
+			.where(and(eq(shows.id, showId), eq(shows.accountId, params.id)))
+			.limit(1);
+		if (!show) return fail(404, { error: 'Show not found.' });
+
+		await db.update(shows).set({ canvaTemplateId }).where(eq(shows.id, showId));
+		return { templateUpdated: true };
+	},
+
 	openLineup: async ({ request, params, locals }) => {
 		if (!await checkLineupAccess(locals, params.id)) return fail(403, { error: 'Access denied' });
 

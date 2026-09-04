@@ -30,7 +30,10 @@
 	type Lineup = { id: string; showDate: string; notes: string | null; entries: Entry[] };
 	type Show = { id: string; name: string; actsPerShow: number | null };
 
-	let { lineup, selectedShow, today }: { lineup: Lineup; selectedShow: Show | null; today: string } = $props();
+	let { lineup, selectedShow, today, accountId = '', canvaTemplateId = null }: {
+		lineup: Lineup; selectedShow: Show | null; today: string;
+		accountId?: string; canvaTemplateId?: string | null;
+	} = $props();
 
 	const STATUS_LABELS: Record<string, string> = { to_contact: 'Contact', booked: 'Booked', cancelled: 'Cancelled' };
 	const STATUS_BADGE: Record<string, string> = { booked: 'badge-success', to_contact: 'badge-warning', cancelled: 'badge-error badge-soft' };
@@ -183,6 +186,60 @@
 	const cap = $derived(selectedShow?.actsPerShow ?? null);
 	const pct = $derived(cap && cap > 0 ? Math.round((active.length / cap) * 100) : null);
 	const isPast = $derived(lineup.showDate < today);
+
+	// Promo generation
+	type PromoEntry = { id: string; name: string; photoUrl: string };
+	let promoDialog = $state<HTMLDialogElement | undefined>();
+	let selectedPerformers = $state<PromoEntry[]>([]);
+	let promoGenerating = $state(false);
+	let promoResult = $state<{ url: string; canvaDesignId: string } | null>(null);
+	let promoError = $state<string | null>(null);
+
+	const entriesWithPhotos = $derived(
+		lineup.entries.filter(e => e.photoUrl && e.status !== 'cancelled') as (Entry & { photoUrl: string })[]
+	);
+
+	function togglePerformer(entry: Entry & { photoUrl: string }) {
+		const existing = selectedPerformers.findIndex(p => p.id === entry.id);
+		if (existing >= 0) selectedPerformers = selectedPerformers.filter(p => p.id !== entry.id);
+		else selectedPerformers = [...selectedPerformers, { id: entry.id, name: entry.name, photoUrl: entry.photoUrl }];
+	}
+
+	function openPromoModal() {
+		selectedPerformers = [];
+		promoResult = null;
+		promoError = null;
+		promoGenerating = false;
+		promoDialog?.showModal();
+	}
+
+	async function generatePromo() {
+		promoGenerating = true;
+		promoError = null;
+		try {
+			const res = await fetch(`/accounts/${accountId}/lineups/${lineup.id}/generate-promo`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					entries: selectedPerformers.map(p => ({ name: p.name, photoUrl: p.photoUrl })),
+					showDate: lineup.showDate
+				})
+			});
+			if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error((e as Record<string, unknown>).message as string ?? `Error ${res.status}`); }
+			promoResult = await res.json();
+		} catch (err) {
+			promoError = err instanceof Error ? err.message : 'Generation failed';
+		} finally {
+			promoGenerating = false;
+		}
+	}
+
+	function downloadPromo(url: string) {
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `${selectedShow?.name ?? 'promo'}-${lineup.showDate}.jpg`.toLowerCase().replace(/\s+/g, '-');
+		a.click();
+	}
 </script>
 
 <div class="rounded-2xl bg-base-100 border border-base-200 overflow-hidden shadow-md min-w-0" class:opacity-70={isPast}>
@@ -220,6 +277,17 @@
 					<span class="hidden sm:inline">Copy</span>
 				{/if}
 			</button>
+			{#if canvaTemplateId}
+				<button
+					onclick={openPromoModal}
+					disabled={entriesWithPhotos.length === 0}
+					class="btn btn-xs btn-outline gap-1"
+					title={entriesWithPhotos.length === 0 ? 'No performers with photos' : 'Generate promo image'}
+				>
+					<svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+					<span class="hidden sm:inline">Promo</span>
+				</button>
+			{/if}
 			<button
 				onclick={() => { if (showAddForm) { showAddForm = false; clearAddForm(); } else { clearAddForm(); showAddForm = true; } }}
 				class="btn btn-xs {showAddForm ? 'btn-soft' : 'btn-outline'} gap-1"
@@ -389,3 +457,65 @@
 		</div>
 	{/if}
 </div>
+
+{#if canvaTemplateId}
+<dialog bind:this={promoDialog} class="modal">
+	<div class="modal-box max-w-md">
+		{#if promoResult}
+			<h3 class="font-bold text-lg mb-3">Promo image ready</h3>
+			<img src={promoResult.url} alt="Generated promo" class="w-full rounded-xl mb-4 object-contain max-h-80" />
+			<div class="flex flex-wrap gap-2">
+				<button onclick={() => downloadPromo(promoResult!.url)} class="btn btn-primary btn-sm gap-1">
+					<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+					Download
+				</button>
+				<a href="https://www.canva.com/design/{promoResult.canvaDesignId}/edit" target="_blank" rel="noopener" class="btn btn-outline btn-sm gap-1">
+					Open in Canva
+				</a>
+				<button onclick={() => promoDialog?.close()} class="btn btn-ghost btn-sm ml-auto">Close</button>
+			</div>
+		{:else}
+			<h3 class="font-bold text-lg mb-1">Generate promo</h3>
+			<p class="text-sm text-base-content/50 mb-4">Select performers to include in the image.</p>
+			{#if promoError}
+				<div class="alert alert-error alert-soft mb-4 text-sm">{promoError}</div>
+			{/if}
+			<div class="flex flex-col gap-2 mb-5">
+				{#each entriesWithPhotos as entry}
+					{@const selected = selectedPerformers.some(p => p.id === entry.id)}
+					<button
+						type="button"
+						onclick={() => togglePerformer(entry)}
+						class="flex items-center gap-3 p-2 rounded-xl border transition-colors {selected ? 'border-primary bg-primary/10' : 'border-base-300 hover:border-base-content/30'}"
+					>
+						<img src={entry.photoUrl} alt={entry.name} class="w-10 h-10 rounded-lg object-cover" />
+						<div class="text-left min-w-0">
+							<p class="text-sm font-medium truncate">{entry.name}</p>
+							<p class="text-xs text-base-content/40">{entry.role === 'mc' ? 'MC' : (entry.role === 'headline' ? 'Headliner' : 'Act')}</p>
+						</div>
+						{#if selected}
+							<svg class="h-4 w-4 text-primary ml-auto shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+						{/if}
+					</button>
+				{/each}
+			</div>
+			<div class="flex gap-2">
+				<button
+					onclick={generatePromo}
+					disabled={selectedPerformers.length === 0 || promoGenerating}
+					class="btn btn-primary btn-sm flex-1 disabled:opacity-40 gap-1"
+				>
+					{#if promoGenerating}
+						<span class="loading loading-spinner loading-xs"></span>
+						Generating…
+					{:else}
+						Generate
+					{/if}
+				</button>
+				<button onclick={() => promoDialog?.close()} class="btn btn-outline btn-sm" disabled={promoGenerating}>Cancel</button>
+			</div>
+		{/if}
+	</div>
+	<form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+{/if}

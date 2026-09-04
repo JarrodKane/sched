@@ -108,10 +108,6 @@
 
 <!-- View switcher -->
 <div class="flex items-center gap-1 mb-5">
-	<a href="/accounts/{data.accountMeta.id}/lineups" class="btn btn-xs btn-outline gap-1">
-		<svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="8" y2="18"/></svg>
-		Week
-	</a>
 	<span class="btn btn-xs btn-primary gap-1 cursor-default">
 		<svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/><line x1="15" y1="9" x2="15" y2="21"/></svg>
 		Table
@@ -211,7 +207,7 @@
 					</div>
 				{:else}
 					<div id="date-{item.date}">
-						<LineupCard lineup={item.lineup} selectedShow={data.selectedShow} today={data.today} />
+						<LineupCard lineup={item.lineup} selectedShow={data.selectedShow} today={data.today} accountId={data.accountMeta.id} canvaTemplateId={data.selectedShow?.canvaTemplateId ?? null} />
 					</div>
 				{/if}
 			{/each}

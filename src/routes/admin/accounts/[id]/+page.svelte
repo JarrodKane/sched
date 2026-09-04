@@ -97,6 +97,9 @@
 									{#if !show.humanitixEventId && !show.eventbriteEventId}
 										<p class="text-xs text-base-content/30">No ticket IDs set</p>
 									{/if}
+									{#if show.canvaTemplateId}
+										<p class="text-xs text-base-content/40 font-mono break-all">Canva: {show.canvaTemplateId}</p>
+									{/if}
 								</div>
 							{/if}
 						</div>
@@ -176,6 +179,10 @@
 								<fieldset class="fieldset">
 									<legend class="fieldset-legend">Eventbrite event ID</legend>
 									<input name="eventbrite_event_id" type="text" value={show.eventbriteEventId ?? ''} placeholder="1991341193114" class="input input-sm w-40 font-mono text-xs" />
+								</fieldset>
+								<fieldset class="fieldset">
+									<legend class="fieldset-legend">Canva template ID</legend>
+									<input name="canva_template_id" type="text" value={show.canvaTemplateId ?? ''} placeholder="EAHUMR0OZ-c" class="input input-sm w-40 font-mono text-xs" />
 								</fieldset>
 							</div>
 							<div>

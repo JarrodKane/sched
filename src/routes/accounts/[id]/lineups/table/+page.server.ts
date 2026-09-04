@@ -42,7 +42,7 @@ export const load: PageServerLoad = async ({ params, url, parent }) => {
 	const today = now.toLocaleDateString('en-CA', { timeZone: 'Australia/Melbourne' });
 
 	const accountShows = await db
-		.select({ id: shows.id, name: shows.name, actsPerShow: shows.actsPerShow, scheduleType: shows.scheduleType, scheduleDayOfWeek: shows.scheduleDayOfWeek })
+		.select({ id: shows.id, name: shows.name, actsPerShow: shows.actsPerShow, scheduleType: shows.scheduleType, scheduleDayOfWeek: shows.scheduleDayOfWeek, canvaTemplateId: shows.canvaTemplateId })
 		.from(shows)
 		.where(eq(shows.accountId, params.id))
 		.orderBy(sql`coalesce(${shows.scheduleDayOfWeek}, 7)`, asc(shows.name));
